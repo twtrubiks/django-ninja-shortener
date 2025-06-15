@@ -1,0 +1,38 @@
+{% load static tailwind_tags %}
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+    <title>Django Ninja Shorty</title>
+    <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<meta http-equiv="X-UA-Compatible" content="ie=edge">
+		{% tailwind_css %}
+	</head>
+
+	<body class="bg-gray-100 text-gray-800 font-sans">
+		<nav class="bg-white shadow-md">
+			<div class="container mx-auto px-6 py-3 flex justify-between items-center">
+				<a class="text-xl font-bold text-gray-800" href="/">Shorty</a>
+				<div>
+					{% if user.is_authenticated %}
+						<a href="{% url 'dashboard' %}" class="text-gray-800 text-sm mx-3">儀表板</a>
+						<span class="text-gray-600 text-sm">您好, {{ user.username }}!</span>
+						<form action="{% url 'logout' %}" method="post" class="inline">
+							{% csrf_token %}
+							<button type="submit" class="text-sm text-blue-500 hover:underline ml-3">登出</button>
+						</form>
+					{% else %}
+						<a href="{% url 'login' %}" class="text-gray-800 text-sm mx-3">登入</a>
+						<a href="{% url 'register' %}" class="text-gray-800 text-sm">註冊</a>
+					{% endif %}
+				</div>
+			</div>
+		</nav>
+
+		<main class="container mx-auto px-6 py-8">
+			{% block content %}
+			{% endblock %}
+		</main>
+	</body>
+</html>

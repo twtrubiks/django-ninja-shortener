@@ -1,0 +1,70 @@
+
+x-base-app-setting: &x-base-app
+  image: ninja-shortener-app
+  build: .
+  volumes:
+    - .:/ninja_shortener
+
+services:
+
+    test:
+      # 這個服務專門用來跑測試
+      # docker compose up   # 啟動常規服務，跳過測試。
+      # docker compose up test # 只運行測試及其直接依賴。
+      # docker compose --profile testing up # 啟動所有 被標記 profile: "testing" 的服務
+      <<: *x-base-app
+      command: bash -c "pytest --cov=. --cov-report=html"
+      # command: bash -c "pytest -s" # print log
+      profiles:
+        - "testing"
+
+    django-ninja:
+      <<: *x-base-app
+      command: bash -c "python manage.py runserver 0.0.0.0:8000"
+      restart: always
+      ports:
+        - "8000:8000"
+      depends_on:
+        tailwind:
+          # 關鍵：不僅是啟動，而是要等到 tailwind 服務健康後
+          condition: service_healthy
+
+        # 對於 django-postgres，只需要等待它啟動即可
+        django-postgres:
+          condition: service_started
+
+    django-postgres:
+      image: postgres:16
+      # ports:
+      #   - "5432:5432"
+      environment:
+        - POSTGRES_DB=postgres
+        - POSTGRES_USER=myuser
+        - POSTGRES_PASSWORD=password123
+        - PGDATA=/var/lib/postgresql/data/pgdata
+      volumes:
+        - db-data:/var/lib/postgresql/data/pgdata
+
+    tailwind:
+      <<: *x-base-app
+      restart: "unless-stopped"
+      command: >
+        bash -c "python manage.py tailwind install &&
+                 python manage.py tailwind build &&
+                 touch /tmp/tailwind.ready &&
+                 python manage.py tailwind start"
+
+      # Without tty, no stdin, and tailwind watcher aborts
+      # https://github.com/tailwindlabs/tailwindcss/issues/5324
+      tty: true
+
+      # 關鍵：新增 healthcheck 來檢查信號檔案
+      healthcheck:
+        # 檢查 /tmp/tailwind.ready 檔案是否存在
+        test: ["CMD", "test", "-f", "/tmp/tailwind.ready"]
+        interval: 5s
+        timeout: 5s
+        retries: 5
+
+volumes:
+  db-data:

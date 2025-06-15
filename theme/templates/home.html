@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
+  <h2 class="text-2xl font-bold mb-6 text-center">縮短您的網址</h2>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="mb-4 p-3 rounded-md
+                  {% if message.tags == 'success' %} bg-green-100 text-green-800
+                  {% elif message.tags == 'error' %} bg-red-100 text-red-800
+                  {% else %} bg-blue-100 text-blue-800 {% endif %}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <form action="{% url 'shorten_url' %}" method="post">
+    {% csrf_token %}
+    <div class="flex items-center border-b-2 border-blue-500 py-2">
+      <input class="appearance-none bg-transparent border-none w-full text-gray-700 mr-3 py-1 px-2 leading-tight focus:outline-none"
+             type="url"
+             name="original_url"
+             placeholder="請輸入您的長網址 (e.g., https://example.com)"
+             aria-label="長網址"
+             required>
+      <button class="flex-shrink-0 bg-blue-500 hover:bg-blue-700 border-blue-500 hover:border-blue-700 text-sm border-4 text-white py-1 px-2 rounded"
+              type="submit">
+        縮短網址
+      </button>
+    </div>
+  </form>
+
+  {% if short_url %}
+    <div class="mt-6 p-4 bg-gray-50 rounded-md">
+      <h3 class="text-lg font-semibold">您的短網址：</h3>
+      <div class="flex justify-between items-center mt-2">
+        <a href="{{ short_url }}" target="_blank" class="text-blue-600 hover:underline">{{ short_url }}</a>
+        <button onclick="copyToClipboard('{{ short_url }}')" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm py-1 px-3 rounded">
+          複製
+        </button>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<script>
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(function() {
+    alert('已複製到剪貼簿！');
+  }, function(err) {
+    alert('複製失敗: ', err);
+  });
+}
+</script>
+{% endblock %}
