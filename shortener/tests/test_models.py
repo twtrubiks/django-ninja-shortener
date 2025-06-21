@@ -1,23 +1,25 @@
 import pytest
 from django.contrib.auth.models import User
 from django.db.utils import IntegrityError
+from django.utils import timezone
 
 from shortener.models import Link
 
-# 使用 @pytest.mark.django_db 標記來確保測試函式可以存取資料庫
+
 @pytest.mark.django_db
 def test_link_model_creation():
     """
-    目標: 驗證 Link 模型是否能成功創建。
-    步驟:
-    1. 創建一個 User 實例。
-    2. 創建一個 Link 實例，並將其與 User 關聯。
-    3. Link 實例的 original_url, short_code, owner 等欄位值是否正確。
+    測試 Link 模型的基本創建功能。
+
+    驗證：
+    - Link 實例能成功創建
+    - 所有欄位值正確設置
+    - 預設值正確設置
     """
-    # 1. 創建 User
+    # 創建測試用戶
     user = User.objects.create_user(username="testuser", password="password123")
 
-    # 2. 創建 Link
+    # 創建 Link 實例
     original_url = "https://www.google.com"
     short_code = "googl"
     link = Link.objects.create(
@@ -26,44 +28,48 @@ def test_link_model_creation():
         owner=user,
     )
 
-    # 3.
+    # 驗證欄位值
     assert link.original_url == original_url
     assert link.short_code == short_code
     assert link.owner == user
-    assert link.click_count == 0  # 預設應為 0
+    assert link.click_count == 0  # 預設值應為 0
+    assert link.last_clicked_at is None  # 初始應為 None
+    assert link.created_at is not None  # 應自動設置創建時間
     assert str(link) == f"{short_code} for {user.username}"
 
 @pytest.mark.django_db
 def test_short_code_uniqueness():
     """
-    目標: 驗證 short_code 欄位的唯一性約束 (unique=True) 是否生效。
-    步驟:
-    1. 創建一個 User 和一個 Link 實例。
-    2. 嘗試創建第二個 Link 實例，使用完全相同的 short_code。
-    3. 預期第二次創建時會拋出 django.db.utils.IntegrityError。
+    測試 short_code 欄位的唯一性約束。
+
+    驗證：
+    - 相同的 short_code 不能重複創建
+    - 違反唯一性約束時拋出 IntegrityError
     """
     user = User.objects.create_user(username="testuser2", password="password123")
+
+    # 創建第一個 Link
     Link.objects.create(
         original_url="https://www.google.com",
         short_code="unique_code",
         owner=user,
     )
 
-    # 嘗試創建一個具有相同 short_code 的 Link
+    # 嘗試創建具有相同 short_code 的 Link，應該拋出 IntegrityError
     with pytest.raises(IntegrityError):
         Link.objects.create(
             original_url="https://www.yahoo.com",
-            short_code="unique_code", # 相同的 short_code
+            short_code="unique_code",  # 相同的 short_code
             owner=user,
         )
 
 @pytest.mark.django_db
-def test_link_model_string_representation():
+def test_link_model_string_representation_with_owner():
     """
-    目標: 驗證 Link 模型的 __str__ 方法是否返回預期的格式。
-    步驟:
-    1. 創建一個 User 和一個 Link 實例。
-    2. str(link_instance) 的結果是否為 "original_url -> short_code"。
+    測試有擁有者的 Link 模型的 __str__ 方法。
+
+    驗證：
+    - 當 Link 有擁有者時，__str__ 返回 "short_code for username" 格式
     """
     user = User.objects.create_user(username="testuser3", password="password123")
     link = Link.objects.create(
@@ -72,4 +78,21 @@ def test_link_model_string_representation():
         owner=user,
     )
     expected_str = f"{link.short_code} for {user.username}"
+    assert str(link) == expected_str
+
+
+@pytest.mark.django_db
+def test_link_model_string_representation_anonymous():
+    """
+    測試匿名用戶的 Link 模型的 __str__ 方法。
+
+    驗證：
+    - 當 Link 沒有擁有者時，__str__ 返回 "short_code (anonymous)" 格式
+    """
+    link = Link.objects.create(
+        original_url="https://example.com",
+        short_code="anon-link",
+        owner=None,
+    )
+    expected_str = f"{link.short_code} (anonymous)"
     assert str(link) == expected_str

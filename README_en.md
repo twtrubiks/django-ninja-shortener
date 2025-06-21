@@ -4,13 +4,17 @@ A modern URL shortener service built with Django, Django Ninja, and Tailwind CSS
 
 Users can register and log in to shorten URLs and track the click count for each short link.
 
-This project was completed with assistance from [Cline](https://github.com/twtrubiks/mcp-vscode-cline?tab=readme-ov-file#cline). For reference, see [.clinerules/01\_doc.md](https://www.google.com/search?q=.clinerules/01_doc.md).
+This project was completed with assistance from [Cline](https://github.com/twtrubiks/mcp-vscode-cline?tab=readme-ov-file#cline). For reference, see [.clinerules/01\_doc.md](.clinerules/01_doc.md)
 
 ## Screenshots
 
 URL Shortener Page (Usable without registration)
 
+![alt tag](https://cdn.imgpile.com/f/qPDKjsy_xl.png)
+
 Track clicks after registration
+
+![alt tag](https://cdn.imgpile.com/f/4R3cy01_xl.png)
 
 ## ✨ Key Features
 
@@ -130,7 +134,7 @@ If you prefer to set up the environment directly on your local machine.
 
 This project uses `pytest` for testing and measures test coverage.
 
-The testing plan can be found in [TESTING\_PLAN.md](https://www.google.com/search?q=TESTING_PLAN.md).
+The testing plan can be found in [TESTING\_PLAN.md](TESTING_PLAN.md).
 
   * **Run tests using Docker:**
 
@@ -147,15 +151,23 @@ The testing plan can be found in [TESTING\_PLAN.md](https://www.google.com/searc
     pytest --cov=. --cov-report=html
     ```
 
+![alt tag](https://cdn.imgpile.com/f/UZnApNQ_xl.png)
+
 ## 📄 API Endpoints
 
 The API provides a programmatic way to interact with the URL shortener service. All API endpoints are under the `/api/` path.
 
 For the best experience, please visit the **API Documentation (Swagger UI)** at [http://localhost:8000/api/docs](https://www.google.com/search?q=http://localhost:8000/api/docs).
 
+![alt tag](https://cdn.imgpile.com/f/Foa4p5C_md.png)
+
 This project uses [Ninja JWT](https://github.com/twtrubiks/django_ninja_tutorial/tree/main?tab=readme-ov-file#ninja-jwt). First, call `/api/token/pair` with your username and password to get your token.
 
+![alt tag](https://cdn.imgpile.com/f/84ABFA4_xl.png)
+
 Then, paste the token into the top right corner to authorize your API calls.
+
+![alt tag](https://cdn.imgpile.com/f/aCbUddW_md.png)
 
 ## 📂 Project Structure
 
@@ -191,9 +203,15 @@ ninja_shortener/
 All articles are original creations resulting from my own research and internalizing the concepts. If you find them helpful and wish to encourage me, you are welcome to buy me a coffee :laughing:
 
 ECPay (No membership required)
+
+![alt tag](https://payment.ecpay.com.tw/Upload/QRCode/201906/QRCode_672351b8-5ab3-42dd-9c7c-c24c3e6a10a0.png)
+
 [Sponsor Link](http://bit.ly/2F7Jrha)
 
 O'Pay (Membership required)
+
+![alt tag](https://i.imgur.com/LRct9xa.png)
+
 [Sponsor Link](https://payment.opay.tw/Broadcaster/Donate/9E47FDEF85ABE383A0F5FC6A218606F8)
 
 ## List of Sponsors
