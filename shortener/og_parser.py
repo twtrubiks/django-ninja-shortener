@@ -6,15 +6,17 @@ Open Graph 資料解析模組
 
 import logging
 from dataclasses import dataclass
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import metadata_parser
+import requests
 
 logger = logging.getLogger(__name__)
 
 # 設定常數
-DEFAULT_TIMEOUT = 10  # 秒
+DEFAULT_TIMEOUT = 5  # 秒
 MAX_TIMEOUT = 30
+MAX_REDIRECTS = 5  # 最大重定向次數
 USER_AGENT = (
     'Mozilla/5.0 (compatible; ShortenerBot/1.0; '
     '+https://github.com/twtrubiks/django-ninja-shortener)'
@@ -129,6 +131,50 @@ def _validate_url_security(url: str) -> None:
         raise SSRFBlockedError('禁止存取 IPv6 localhost')
 
 
+def _fetch_with_safe_redirects(url: str, timeout: int) -> requests.Response:
+    """
+    安全地抓取 URL，驗證每個重定向目標以防止 DNS 重綁定攻擊
+
+    Args:
+        url: 目標 URL
+        timeout: 請求超時時間（秒）
+
+    Returns:
+        requests.Response: HTTP 回應
+
+    Raises:
+        SSRFBlockedError: 如果重定向目標指向私有網路
+        OGParserError: 超過最大重定向次數或其他錯誤
+    """
+    with requests.Session() as session:
+        session.headers.update({'User-Agent': USER_AGENT})
+
+        current_url = url
+        for _ in range(MAX_REDIRECTS):
+            # 驗證當前 URL 的安全性
+            _validate_url_security(current_url)
+
+            response = session.get(
+                current_url,
+                timeout=timeout,
+                allow_redirects=False,
+            )
+
+            # 如果不是重定向，返回回應
+            if response.status_code not in (301, 302, 303, 307, 308):
+                return response
+
+            # 取得重定向目標
+            location = response.headers.get('Location')
+            if not location:
+                raise OGParserError('重定向缺少 Location header')
+
+            # 處理相對 URL
+            current_url = urljoin(current_url, location)
+
+        raise OGParserError(f'超過最大重定向次數 ({MAX_REDIRECTS})')
+
+
 def _safe_get_from_metadata(metadata: dict, key: str, default: str = '') -> str:
     """
     從 metadata 字典中安全取得值
@@ -178,7 +224,7 @@ def fetch_og_data(
 
     Args:
         url: 目標網頁 URL
-        timeout: 請求超時時間（秒），預設 10 秒，最大 30 秒
+        timeout: 請求超時時間（秒），預設 5 秒，最大 30 秒
 
     Returns:
         OGData: 包含 OG 資料的資料結構
@@ -188,21 +234,20 @@ def fetch_og_data(
         FetchTimeoutError: 請求超時
         OGParserError: 其他解析錯誤
     """
-    # 安全驗證
-    _validate_url_security(url)
-
     # 限制超時時間
     timeout = min(timeout, MAX_TIMEOUT)
 
     try:
-        # 使用 metadata_parser 抓取
+        # 使用安全重定向處理抓取 HTML
+        response = _fetch_with_safe_redirects(url, timeout)
+
+        # 使用 metadata_parser 解析已抓取的 HTML
         page = metadata_parser.MetadataParser(
-            url=url,
-            url_headers={'User-Agent': USER_AGENT},
+            html=response.text,
+            url=response.url,
             search_head_only=True,  # 只搜索 <head>，提升效能
             support_malformed=True,  # 處理格式錯誤的 HTML
             strategy=['page', 'meta', 'og', 'dc'],  # 嘗試多種策略
-            requests_timeout=timeout,
         )
 
         # 從 parsed_result 取得 metadata 字典
@@ -232,15 +277,22 @@ def fetch_og_data(
         logger.info(f'Successfully fetched OG data for {url}')
         return og_data
 
+    except requests.exceptions.Timeout:
+        logger.warning(f'Timeout fetching {url}')
+        raise FetchTimeoutError(f'請求超時: {url}')
+
+    except requests.exceptions.ConnectionError as e:
+        logger.warning(f'Connection error fetching {url}: {e}')
+        raise OGParserError(f'無法連線: {e}')
+
+    except (SSRFBlockedError, InvalidURLError):
+        # 重新拋出安全相關錯誤
+        raise
+
     except metadata_parser.NotParsableFetchError as e:
-        logger.warning(f'Failed to fetch {url}: {e}')
-        raise OGParserError(f'無法抓取網頁: {e}')
+        logger.warning(f'Failed to parse {url}: {e}')
+        raise OGParserError(f'無法解析網頁: {e}')
 
     except Exception as e:
-        error_msg = str(e).lower()
-        if 'timeout' in error_msg or 'timed out' in error_msg:
-            logger.warning(f'Timeout fetching {url}')
-            raise FetchTimeoutError(f'請求超時: {url}')
-
         logger.exception(f'Unexpected error fetching OG data for {url}')
         raise OGParserError(f'解析錯誤: {e}')

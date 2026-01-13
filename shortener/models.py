@@ -7,7 +7,7 @@ from .validators import validate_url_scheme
 
 class Link(models.Model):
     original_url = models.URLField(validators=[validate_url_scheme])
-    short_code = models.CharField(max_length=50, unique=True, db_index=True)
+    short_code = models.CharField(max_length=50, unique=True, db_index=True, null=True, blank=True)
     is_custom_slug = models.BooleanField(default=False)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -18,6 +18,8 @@ class Link(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=['owner', '-created_at']),
+            models.Index(fields=['-click_count']),
+            models.Index(fields=['expires_at']),
         ]
 
     def __str__(self):

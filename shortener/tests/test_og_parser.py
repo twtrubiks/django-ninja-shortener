@@ -4,7 +4,9 @@ Open Graph Parser 單元測試
 使用 unittest.mock 模擬外部 HTTP 請求
 """
 
+import metadata_parser
 import pytest
+import requests
 from unittest.mock import MagicMock, patch
 
 from shortener.og_parser import (
@@ -69,8 +71,16 @@ class TestFetchOGData:
     """OG 資料抓取測試"""
 
     @patch('shortener.og_parser.metadata_parser.MetadataParser')
-    def test_successful_fetch(self, mock_parser_class):
+    @patch('shortener.og_parser.requests.Session.get')
+    def test_successful_fetch(self, mock_get, mock_parser_class):
         """成功抓取 OG 資料"""
+        # Mock requests 回應
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '<html></html>'
+        mock_response.url = 'https://example.com'
+        mock_get.return_value = mock_response
+
         # 設定 mock - 模擬 parsed_result.metadata 結構
         mock_parser = MagicMock()
         mock_parser.parsed_result.metadata = {
@@ -98,8 +108,16 @@ class TestFetchOGData:
         assert result.is_empty is False
 
     @patch('shortener.og_parser.metadata_parser.MetadataParser')
-    def test_fallback_to_meta_tags(self, mock_parser_class):
+    @patch('shortener.og_parser.requests.Session.get')
+    def test_fallback_to_meta_tags(self, mock_get, mock_parser_class):
         """無 OG 標籤時退回使用 meta 標籤"""
+        # Mock requests 回應
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '<html></html>'
+        mock_response.url = 'https://example.com'
+        mock_get.return_value = mock_response
+
         mock_parser = MagicMock()
         mock_parser.parsed_result.metadata = {
             'og': {},
@@ -114,18 +132,24 @@ class TestFetchOGData:
         assert result.title == 'Page Title'
         assert result.description == 'Meta Description'
 
-    @patch('shortener.og_parser.metadata_parser.MetadataParser')
-    def test_handles_timeout(self, mock_parser_class):
+    @patch('shortener.og_parser.requests.Session.get')
+    def test_handles_timeout(self, mock_get):
         """處理請求超時"""
-        mock_parser_class.side_effect = Exception('Connection timed out')
+        mock_get.side_effect = requests.exceptions.Timeout('Connection timed out')
 
         with pytest.raises(FetchTimeoutError):
             fetch_og_data('https://slow-site.com')
 
     @patch('shortener.og_parser.metadata_parser.MetadataParser')
-    def test_handles_parse_error(self, mock_parser_class):
+    @patch('shortener.og_parser.requests.Session.get')
+    def test_handles_parse_error(self, mock_get, mock_parser_class):
         """處理解析錯誤"""
-        import metadata_parser
+        # Mock requests 回應
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '<html></html>'
+        mock_response.url = 'https://example.com/404'
+        mock_get.return_value = mock_response
 
         mock_parser_class.side_effect = metadata_parser.NotParsableFetchError('404')
 
@@ -138,8 +162,16 @@ class TestFetchOGData:
             fetch_og_data('http://192.168.1.1/admin')
 
     @patch('shortener.og_parser.metadata_parser.MetadataParser')
-    def test_truncates_long_content(self, mock_parser_class):
+    @patch('shortener.og_parser.requests.Session.get')
+    def test_truncates_long_content(self, mock_get, mock_parser_class):
         """截斷過長的內容"""
+        # Mock requests 回應
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '<html></html>'
+        mock_response.url = 'https://example.com'
+        mock_get.return_value = mock_response
+
         mock_parser = MagicMock()
         long_title = 'A' * 1000  # 超過 500 字元
         mock_parser.parsed_result.metadata = {
@@ -153,6 +185,21 @@ class TestFetchOGData:
         result = fetch_og_data('https://example.com')
 
         assert len(result.title) == 500
+
+    @patch('shortener.og_parser.requests.Session')
+    def test_blocks_redirect_to_private_ip(self, mock_session_class):
+        """重定向到私有 IP 應被阻擋"""
+        mock_session = MagicMock()
+        mock_session_class.return_value.__enter__.return_value = mock_session
+
+        # 模擬 301 重定向到私有 IP
+        mock_response = MagicMock()
+        mock_response.status_code = 301
+        mock_response.headers = {'Location': 'http://192.168.1.1/admin'}
+        mock_session.get.return_value = mock_response
+
+        with pytest.raises(SSRFBlockedError):
+            fetch_og_data('https://evil-site.com')
 
 
 class TestOGDataClass:

@@ -1,4 +1,3 @@
-import uuid
 from datetime import timedelta
 
 from django.contrib import messages
@@ -109,7 +108,6 @@ def shorten_url_view(request):
                         # 使用 Sqids 自動生成
                         link = Link.objects.create(
                             original_url=original_url,
-                            short_code=str(uuid.uuid4())[:15],  # 暫時值
                             is_custom_slug=False,
                             owner=owner,
                             expires_at=expires_at,
