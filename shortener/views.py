@@ -1,12 +1,16 @@
-from django.shortcuts import render, get_object_or_404, redirect
-from django.utils import timezone
+import shortuuid
+
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
-from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views import generic
+
 from .models import Link
-import shortuuid
+from .validators import validate_url_scheme
 
 def home_view(request):
     context = {}
@@ -30,6 +34,13 @@ def redirect_view(request, short_code):
 def shorten_url_view(request):
     if request.method == 'POST':
         if original_url := request.POST.get('original_url'):
+            # 驗證 URL 協議
+            try:
+                validate_url_scheme(original_url)
+            except ValidationError as e:
+                messages.error(request, e.message)
+                return redirect('home')
+
             # 產生不重複的 short_code
             while True:
                 short_code = shortuuid.uuid()[:8]
