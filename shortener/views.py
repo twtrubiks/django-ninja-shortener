@@ -113,16 +113,11 @@ def shorten_url_view(request):
                         messages.error(request, str(e))
                         return redirect('home')
 
-            # 使用 transaction 確保原子性，並捕獲 IntegrityError 處理競態條件
-            try:
-                with transaction.atomic():
-                    if custom_slug:
-                        # 樂觀檢查：大多數情況有效
-                        if Link.objects.filter(short_code=custom_slug).exists():
-                            messages.error(request, f'網址「{custom_slug}」已被使用，請選擇其他名稱')
-                            return redirect('home')
-
-                        # 使用自訂 slug
+            # 使用 transaction 確保原子性
+            with transaction.atomic():
+                if custom_slug:
+                    # 直接依賴資料庫唯一約束，避免 TOCTOU 競態條件
+                    try:
                         link = Link.objects.create(
                             original_url=original_url,
                             short_code=custom_slug,
@@ -130,8 +125,12 @@ def shorten_url_view(request):
                             owner=owner,
                             expires_at=expires_at,
                         )
-                    else:
-                        # 使用 Sqids 自動生成
+                    except IntegrityError:
+                        messages.error(request, f'網址「{custom_slug}」已被使用，請選擇其他名稱')
+                        return redirect('home')
+                else:
+                    # 使用 Sqids 自動生成
+                    try:
                         link = Link.objects.create(
                             original_url=original_url,
                             is_custom_slug=False,
@@ -141,14 +140,10 @@ def shorten_url_view(request):
                         # 使用資料庫 ID 生成短碼（零碰撞）
                         link.short_code = generate_short_code_from_id(link.id)
                         link.save(update_fields=['short_code'])
-            except IntegrityError:
-                # 後備：處理競態條件（兩個請求同時創建相同 slug）
-                if custom_slug:
-                    messages.error(request, f'網址「{custom_slug}」已被使用，請選擇其他名稱')
-                else:
-                    # Sqids 生成的短碼理論上不會重複，如果發生表示系統異常
-                    messages.error(request, '系統發生錯誤，請稍後再試')
-                return redirect('home')
+                    except IntegrityError:
+                        # Sqids 生成的短碼理論上不會重複，如果發生表示系統異常
+                        messages.error(request, '系統發生錯誤，請稍後再試')
+                        return redirect('home')
 
             full_short_url = request.build_absolute_uri(f'/{link.short_code}')
             messages.success(request, "成功建立短網址！")

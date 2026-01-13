@@ -221,13 +221,10 @@ def shorten_url(request, payload: ShortenRequest):
 
     custom_slug = payload.custom_slug
 
-    try:
-        with transaction.atomic():
-            if custom_slug:
-                # 樂觀檢查：大多數情況有效
-                if Link.objects.filter(short_code=custom_slug).exists():
-                    return 409, {'detail': f'網址「{custom_slug}」已被使用，請選擇其他名稱'}
-
+    with transaction.atomic():
+        if custom_slug:
+            # 直接依賴資料庫唯一約束，避免 TOCTOU 競態條件
+            try:
                 link = Link.objects.create(
                     original_url=str(payload.original_url),
                     short_code=custom_slug,
@@ -235,8 +232,11 @@ def shorten_url(request, payload: ShortenRequest):
                     owner=owner,
                     expires_at=payload.expires_at,
                 )
-            else:
-                # 使用 Sqids 自動生成（現有邏輯）
+            except IntegrityError:
+                return 409, {'detail': f'網址「{custom_slug}」已被使用，請選擇其他名稱'}
+        else:
+            # 使用 Sqids 自動生成（現有邏輯）
+            try:
                 link = Link.objects.create(
                     original_url=str(payload.original_url),
                     short_code=str(uuid.uuid4())[:15],  # 暫時值
@@ -247,13 +247,9 @@ def shorten_url(request, payload: ShortenRequest):
                 # 使用資料庫 ID 生成短碼（零碰撞）
                 link.short_code = generate_short_code_from_id(link.id)
                 link.save(update_fields=['short_code'])
-    except IntegrityError:
-        # 後備：處理競態條件（兩個請求同時創建相同 slug）
-        if custom_slug:
-            return 409, {'detail': f'網址「{custom_slug}」已被使用，請選擇其他名稱'}
-        else:
-            # Sqids 生成的短碼理論上不會重複，如果發生表示系統異常
-            return 500, {'detail': '系統發生錯誤，請稍後再試'}
+            except IntegrityError:
+                # Sqids 生成的短碼理論上不會重複，如果發生表示系統異常
+                return 500, {'detail': '系統發生錯誤，請稍後再試'}
 
     # 同步抓取 OG 資料（在 transaction 外執行）
     _fetch_and_save_preview(link)
