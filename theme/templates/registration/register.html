@@ -20,9 +20,10 @@
         <input type="{{ field.field.widget.input_type }}"
                name="{{ field.name }}"
                id="{{ field.id_for_label }}"
+               {% if field.field.widget.input_type != 'password' %}value="{{ field.value|default:'' }}"{% endif %}
                class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline {% if field.errors %}border-red-500{% endif %}"
                >
-        {% if field.help_text %}
+        {% if field.help_text and field.name == 'username' %}
           <p class="text-gray-600 text-xs italic mt-1">{{ field.help_text|safe }}</p>
         {% endif %}
         {% for error in field.errors %}
