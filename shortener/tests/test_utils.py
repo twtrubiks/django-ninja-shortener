@@ -1,63 +1,79 @@
-import pytest
 import re
-from shortener.utils import generate_short_code
-from shortener.models import Link
+from shortener.utils import generate_short_code_from_id, decode_short_code
 
 
-@pytest.mark.django_db
-def test_short_code_generator_format():
+def test_generate_short_code_from_id_format():
     """
-    測試短代碼生成器的格式和長度。
+    測試 Sqids 短碼生成器的格式和長度。
 
     驗證：
-    - 預設長度為 7 個字符
+    - 生成的代碼至少 8 個字符（min_length=8）
     - 只包含英文字母和數字
-    - 支援自訂長度
-    - 邊界情況處理正確
     """
-    # 測試預設長度
-    default_code = generate_short_code()
-    assert len(default_code) == 7
-    assert re.match(r'^[a-zA-Z0-9]{7}$', default_code) is not None
+    # 測試基本格式
+    code = generate_short_code_from_id(1)
+    assert len(code) >= 8
+    assert re.match(r'^[a-zA-Z0-9]+$', code) is not None
 
-    # 測試自訂長度
-    custom_length = 10
-    custom_code = generate_short_code(length=custom_length)
-    assert len(custom_code) == custom_length
-    assert re.match(r'^[a-zA-Z0-9]{10}$', custom_code) is not None
-
-    # 測試邊界情況 - 最小長度
-    short_code = generate_short_code(length=1)
-    assert len(short_code) == 1
-    assert re.match(r'^[a-zA-Z0-9]{1}$', short_code) is not None
+    # 測試較大的 ID
+    code_large = generate_short_code_from_id(999999)
+    assert len(code_large) >= 8
+    assert re.match(r'^[a-zA-Z0-9]+$', code_large) is not None
 
 
-@pytest.mark.django_db
-def test_short_code_generator_uniqueness():
+def test_generate_short_code_from_id_deterministic():
     """
-    測試短代碼生成器的唯一性。
+    測試 Sqids 短碼生成器是確定性的（相同 ID 生成相同碼）。
 
     驗證：
-    - 生成的代碼不會與資料庫中現有的代碼重複
-    - 多次調用生成不同的代碼
+    - 相同的 ID 每次生成相同的短碼
     """
-    # 先在資料庫中創建一些 Link 記錄
-    existing_codes = ['abc123', 'def456', 'ghi789']
-    for code in existing_codes:
-        Link.objects.create(
-            original_url=f"https://example{code}.com",
-            short_code=code,
-            owner=None
-        )
+    code1 = generate_short_code_from_id(12345)
+    code2 = generate_short_code_from_id(12345)
+    assert code1 == code2
 
-    # 生成新的代碼，應該不會與現有的重複
-    new_code = generate_short_code()
-    assert new_code not in existing_codes
-    assert not Link.objects.filter(short_code=new_code).exists()
 
-    # 測試多次生成的代碼都是唯一的
-    generated_codes = set()
-    for _ in range(10):
-        code = generate_short_code()
-        assert code not in generated_codes
-        generated_codes.add(code)
+def test_generate_short_code_from_id_unique():
+    """
+    測試不同 ID 生成不同的短碼。
+
+    驗證：
+    - 不同的 ID 生成不同的短碼
+    """
+    codes = set()
+    for i in range(1, 101):
+        code = generate_short_code_from_id(i)
+        assert code not in codes, f"ID {i} 生成的短碼 {code} 與其他 ID 重複"
+        codes.add(code)
+
+
+def test_decode_short_code_roundtrip():
+    """
+    測試短碼可以正確解碼回原始 ID。
+
+    驗證：
+    - encode -> decode 回傳原始 ID
+    """
+    test_ids = [1, 10, 100, 1000, 12345, 999999]
+
+    for original_id in test_ids:
+        code = generate_short_code_from_id(original_id)
+        decoded_id = decode_short_code(code)
+        assert decoded_id == original_id, f"ID {original_id} 的短碼 {code} 解碼為 {decoded_id}"
+
+
+def test_decode_short_code_invalid():
+    """
+    測試無效短碼的處理。
+
+    驗證：
+    - 空字串返回 None
+    - 無效格式返回 None 或空列表
+    """
+    # 空字串
+    result = decode_short_code('')
+    assert result is None
+
+    # 特殊字符（Sqids 只使用字母數字，所以這應該無效）
+    result = decode_short_code('!@#$%')
+    assert result is None

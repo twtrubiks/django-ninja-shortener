@@ -36,7 +36,7 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 * **資料庫**：
   * 開發環境：SQLite (預設)
   * 生產環境：可輕鬆替換為 PostgreSQL (已在 `settings.py` 中預留設定)
-* **短網址代碼**：使用 `shortuuid` 產生
+* **短網址代碼**：使用 [Sqids](https://sqids.org/) 從資料庫 ID 生成（零碰撞設計）
 * **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)
 * **容器化**：[Docker](https://github.com/twtrubiks/docker-tutorial)
 

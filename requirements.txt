@@ -1,6 +1,7 @@
 Django==5.2.9
 django-ninja==1.5.1
 shortuuid==1.0.13
+sqids==0.5.2
 django-ninja-extra==0.30.8
 django-ninja-jwt==5.4.2
 django-tailwind==4.4.2

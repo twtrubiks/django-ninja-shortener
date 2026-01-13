@@ -34,7 +34,7 @@ Track clicks after registration
   * **Database**:
       * Development: SQLite (default)
       * Production: Easily switchable to PostgreSQL (configuration provided in `settings.py`)
-  * **Short Code Generation**: Uses `shortuuid`
+  * **Short Code Generation**: Uses [Sqids](https://sqids.org/) to generate from database ID (zero collision design)
   * **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial)
   * **Containerization**: [Docker](https://github.com/twtrubiks/docker-tutorial)
 

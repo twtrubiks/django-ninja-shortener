@@ -1,20 +1,31 @@
-import string
-import random
-from .models import Link
+from sqids import Sqids
 
-def generate_short_code(length=7):
+# 初始化 Sqids，設定最小長度為 8
+_sqids = Sqids(min_length=8)
+
+
+def generate_short_code_from_id(record_id: int) -> str:
     """
-    生成一個指定長度的、唯一的短代碼。
+    從資料庫 ID 生成短碼（零碰撞）。
 
     Args:
-        length (int): 短代碼的長度，預設為 7。
+        record_id: 資料庫記錄的主鍵 ID
 
     Returns:
-        str: 一個在資料庫中唯一的短代碼。
+        8+ 字元的短碼字串
     """
-    characters = string.ascii_letters + string.digits
-    while True:
-        code = ''.join(random.choice(characters) for _ in range(length))
-        # 檢查生成的代碼是否已經存在於資料庫中
-        if not Link.objects.filter(short_code=code).exists():
-            return code
+    return _sqids.encode([record_id])
+
+
+def decode_short_code(short_code: str) -> int | None:
+    """
+    從短碼解碼回資料庫 ID。
+
+    Args:
+        short_code: 短碼字串
+
+    Returns:
+        資料庫 ID，若無效則返回 None
+    """
+    numbers = _sqids.decode(short_code)
+    return numbers[0] if numbers else None
