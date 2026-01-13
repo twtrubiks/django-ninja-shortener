@@ -251,7 +251,13 @@ def shorten_url(request, payload: ShortenRequest):
                 # Sqids 生成的短碼理論上不會重複，如果發生表示系統異常
                 return 500, {'detail': '系統發生錯誤，請稍後再試'}
 
-    # 同步抓取 OG 資料（在 transaction 外執行）
+    # TODO: 異步化優化點
+    # 目前 OG 資料同步抓取，若目標網站響應慢（>10秒）會阻塞 API 響應
+    # 優化建議：
+    # 1. Celery + Redis：生產環境推薦，需增加 Redis 和 Worker 服務
+    # 2. Huey：輕量替代方案
+    # 3. Django Q：與 Django 整合更緊密
+    # 4. 立即返回 + 前端輪詢：先返回 pending 狀態，前端輪詢 preview 結果
     _fetch_and_save_preview(link)
 
     # 重新載入 link 以取得 preview 關聯
