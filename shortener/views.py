@@ -1,4 +1,5 @@
 import uuid
+from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -15,6 +16,16 @@ from .models import Link, LinkPreview
 from .og_parser import OGParserError, fetch_og_data
 from .utils import generate_short_code_from_id
 from .validators import validate_url_scheme
+
+# 允許的過期時間選項（秒）- 白名單驗證
+EXPIRES_IN_CHOICES = {
+    '': None,           # 永久
+    '3600': 3600,       # 1 小時
+    '86400': 86400,     # 1 天
+    '604800': 604800,   # 7 天
+    '2592000': 2592000, # 30 天
+}
+
 
 def home_view(request):
     context = {}
@@ -59,13 +70,21 @@ def shorten_url_view(request):
 
             owner = request.user if request.user.is_authenticated else None
 
+            # 計算過期時間（僅登入用戶，使用白名單驗證）
+            expires_at = None
+            if request.user.is_authenticated:
+                expires_in = request.POST.get('expires_in', '')
+                if expires_in in EXPIRES_IN_CHOICES and EXPIRES_IN_CHOICES[expires_in]:
+                    expires_at = timezone.now() + timedelta(seconds=EXPIRES_IN_CHOICES[expires_in])
+
             # 使用 transaction 確保原子性
             with transaction.atomic():
                 # 先建立記錄（使用 UUID 作為暫時值，避免 unique 約束衝突）
                 link = Link.objects.create(
                     original_url=original_url,
                     short_code=str(uuid.uuid4())[:15],
-                    owner=owner
+                    owner=owner,
+                    expires_at=expires_at,
                 )
 
                 # 使用資料庫 ID 生成短碼（零碰撞）
