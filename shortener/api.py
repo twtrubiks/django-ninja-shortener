@@ -1,17 +1,19 @@
+import re
 import uuid
 from datetime import datetime
 from typing import Optional
 
 from django.db import transaction
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from ninja import ModelSchema, Router, Schema
+from ninja import ModelSchema, Query, Router, Schema
 from ninja_jwt.authentication import JWTAuth
-from pydantic import HttpUrl
+from pydantic import HttpUrl, field_validator
 
 from .models import Link, LinkPreview
 from .og_parser import OGParserError, fetch_og_data
+from .qr_utils import generate_qr_code
 from .utils import generate_short_code_from_id
 
 router = Router(tags=['shorteners'])
@@ -23,6 +25,28 @@ router = Router(tags=['shorteners'])
 class ShortenRequest(Schema):
     original_url: HttpUrl
     expires_at: Optional[datetime] = None
+
+
+class QRCodeParams(Schema):
+    """QR Code 生成參數"""
+
+    size: int = 256
+    dark: str = "#000000"
+    light: str = "#FFFFFF"
+
+    @field_validator('size')
+    @classmethod
+    def validate_size(cls, v):
+        if v not in (128, 256, 512):
+            raise ValueError('尺寸必須是 128, 256 或 512')
+        return v
+
+    @field_validator('dark', 'light')
+    @classmethod
+    def validate_color(cls, v):
+        if not re.match(r'^#[0-9A-Fa-f]{6}$', v):
+            raise ValueError('顏色必須是有效的十六進位格式，例如 #FF0000')
+        return v
 
 
 # ========== Output Schemas ==========
@@ -213,3 +237,28 @@ def get_link_detail(request, short_code: str):
         return JsonResponse({'detail': '您沒有權限查看此連結'}, status=403)
 
     return _link_to_response(link)
+
+
+@router.get('/links/{short_code}/qr')
+def get_qr_code(request, short_code: str, params: QRCodeParams = Query(...)):
+    """
+    生成短網址的 QR Code
+
+    - 不需認證（短網址是公開的）
+    - 支援尺寸：128 / 256 / 512
+    - 支援自訂前景色和背景色
+    """
+    link = get_object_or_404(Link, short_code=short_code)
+
+    if link.is_expired:
+        return JsonResponse({'detail': '連結已過期'}, status=410)
+
+    full_url = f"{request.scheme}://{request.get_host()}/{short_code}"
+    buffer = generate_qr_code(
+        url=full_url,
+        size=params.size,
+        dark=params.dark,
+        light=params.light,
+    )
+
+    return HttpResponse(buffer, content_type='image/png')
