@@ -30,6 +30,10 @@ def dashboard_view(request):
 def redirect_view(request, short_code):
     link = get_object_or_404(Link, short_code=short_code)
 
+    # 檢查是否過期
+    if link.is_expired:
+        return render(request, 'expired.html', {'short_code': short_code}, status=410)
+
     # 使用 F() 表達式進行原子性更新，避免競態條件
     Link.objects.filter(pk=link.pk).update(
         click_count=F('click_count') + 1,

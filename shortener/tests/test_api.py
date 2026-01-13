@@ -1,11 +1,13 @@
+from datetime import datetime, timedelta, timezone as tz
+
 import pytest
 from django.contrib.auth.models import User
 from ninja import NinjaAPI
 from ninja.testing import TestClient
 from ninja_jwt.tokens import RefreshToken
 
-from shortener.models import Link
 from ninja_shortener.api import api
+from shortener.models import Link
 
 
 @pytest.fixture(autouse=True)
@@ -96,3 +98,62 @@ def test_create_link_with_invalid_url():
     # Django Ninja 對於 Schema 驗證失敗通常返回 422
     assert response.status_code == 422
     assert not Link.objects.filter(original_url="not-a-valid-url").exists()
+
+
+@pytest.mark.django_db
+def test_create_link_with_expires_at():
+    """
+    測試建立帶有過期時間的短網址。
+
+    驗證：
+    - HTTP 狀態碼為 200
+    - 資料庫中的 expires_at 欄位正確設置
+    - 回應的 JSON 包含 expires_at
+    """
+    user = User.objects.create_user(username="testuser_expires", password="password123")
+    refresh = RefreshToken.for_user(user)
+    token = str(refresh.access_token)
+    client = TestClient(api, headers={"Authorization": f"Bearer {token}"})
+
+    original_url = "https://example.com/expiring"
+    expires_at = (datetime.now(tz.utc) + timedelta(days=7)).isoformat()
+
+    response = client.post(
+        "/shorten",
+        json={"original_url": original_url, "expires_at": expires_at}
+    )
+
+    assert response.status_code == 200
+
+    # 驗證資料庫記錄
+    link = Link.objects.get(original_url=original_url)
+    assert link.expires_at is not None
+
+    # 驗證回應內容
+    response_json = response.json()
+    assert response_json["expires_at"] is not None
+
+
+@pytest.mark.django_db
+def test_create_link_without_expires_at():
+    """
+    測試建立不帶過期時間的短網址（向後相容）。
+
+    驗證：
+    - HTTP 狀態碼為 200
+    - 資料庫中的 expires_at 欄位為 None
+    """
+    user = User.objects.create_user(username="testuser_no_exp", password="password123")
+    refresh = RefreshToken.for_user(user)
+    token = str(refresh.access_token)
+    client = TestClient(api, headers={"Authorization": f"Bearer {token}"})
+
+    original_url = "https://example.com/permanent"
+
+    response = client.post("/shorten", json={"original_url": original_url})
+
+    assert response.status_code == 200
+
+    # 驗證資料庫記錄
+    link = Link.objects.get(original_url=original_url)
+    assert link.expires_at is None

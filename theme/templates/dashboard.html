@@ -14,20 +14,21 @@
       <table class="min-w-full bg-white">
         <thead class="bg-gray-200">
           <tr>
-            <th class="w-1/3 text-left py-3 px-4 uppercase font-semibold text-sm">原始網址</th>
-            <th class="w-1/3 text-left py-3 px-4 uppercase font-semibold text-sm">短網址</th>
+            <th class="text-left py-3 px-4 uppercase font-semibold text-sm">原始網址</th>
+            <th class="text-left py-3 px-4 uppercase font-semibold text-sm">短網址</th>
             <th class="text-center py-3 px-4 uppercase font-semibold text-sm">點擊</th>
+            <th class="text-center py-3 px-4 uppercase font-semibold text-sm">狀態</th>
             <th class="text-left py-3 px-4 uppercase font-semibold text-sm">建立日期</th>
-            <th class="text-left py-3 px-4 uppercase font-semibold text-sm">最後點擊</th>
+            <th class="text-left py-3 px-4 uppercase font-semibold text-sm">過期時間</th>
             <th class="text-left py-3 px-4 uppercase font-semibold text-sm">操作</th>
           </tr>
         </thead>
         <tbody class="text-gray-700">
           {% for link in links %}
-            <tr class="border-b">
+            <tr class="border-b {% if link.is_expired %}bg-red-50{% endif %}">
               <td class="py-3 px-4">
                 <a href="{{ link.original_url }}" target="_blank" class="hover:underline truncate" title="{{ link.original_url }}">
-                  {{ link.original_url|truncatechars:50 }}
+                  {{ link.original_url|truncatechars:40 }}
                 </a>
               </td>
               <td class="py-3 px-4">
@@ -36,10 +37,19 @@
                 </a>
               </td>
               <td class="text-center py-3 px-4">{{ link.click_count }}</td>
+              <td class="text-center py-3 px-4">
+                {% if link.is_expired %}
+                  <span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">已過期</span>
+                {% elif link.expires_at %}
+                  <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">有效</span>
+                {% else %}
+                  <span class="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded">永久</span>
+                {% endif %}
+              </td>
               <td class="py-3 px-4">{{ link.created_at|date:"Y-m-d H:i" }}</td>
               <td class="py-3 px-4">
-                {% if link.last_clicked_at %}
-                  {{ link.last_clicked_at|date:"Y-m-d H:i" }}
+                {% if link.expires_at %}
+                  {{ link.expires_at|date:"Y-m-d H:i" }}
                 {% else %}
                   -
                 {% endif %}

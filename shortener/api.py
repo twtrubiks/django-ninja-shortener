@@ -1,4 +1,6 @@
 import uuid
+from datetime import datetime
+from typing import Optional
 
 from django.db import transaction
 from ninja import ModelSchema, Router, Schema
@@ -13,6 +15,7 @@ router = Router(tags=["shorteners"])
 # Input Schema
 class ShortenRequest(Schema):
     original_url: HttpUrl
+    expires_at: Optional[datetime] = None
 
 # Output Schema
 class LinkSchema(ModelSchema):
@@ -31,7 +34,8 @@ def shorten_url(request, payload: ShortenRequest):
         link = Link.objects.create(
             original_url=str(payload.original_url),
             short_code=str(uuid.uuid4())[:15],
-            owner=owner
+            owner=owner,
+            expires_at=payload.expires_at
         )
 
         # 使用資料庫 ID 生成短碼（零碰撞）

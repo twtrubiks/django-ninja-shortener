@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import pytest
 from django.contrib.auth.models import User
 from django.db.utils import IntegrityError
@@ -96,3 +98,38 @@ def test_link_model_string_representation_anonymous():
     )
     expected_str = f"{link.short_code} (anonymous)"
     assert str(link) == expected_str
+
+
+# ===== is_expired Property Tests =====
+
+@pytest.mark.django_db
+def test_link_is_expired_when_expires_at_is_past():
+    """測試過期連結的 is_expired 返回 True。"""
+    link = Link.objects.create(
+        original_url="https://example.com",
+        short_code="exp-test1",
+        expires_at=timezone.now() - timedelta(hours=1)
+    )
+    assert link.is_expired is True
+
+
+@pytest.mark.django_db
+def test_link_is_not_expired_when_expires_at_is_future():
+    """測試未過期連結的 is_expired 返回 False。"""
+    link = Link.objects.create(
+        original_url="https://example.com",
+        short_code="exp-test2",
+        expires_at=timezone.now() + timedelta(days=7)
+    )
+    assert link.is_expired is False
+
+
+@pytest.mark.django_db
+def test_link_is_not_expired_when_expires_at_is_none():
+    """測試無過期時間的連結 is_expired 返回 False。"""
+    link = Link.objects.create(
+        original_url="https://example.com",
+        short_code="exp-test3",
+        expires_at=None
+    )
+    assert link.is_expired is False

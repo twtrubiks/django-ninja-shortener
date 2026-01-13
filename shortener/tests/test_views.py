@@ -1,8 +1,11 @@
+from datetime import timedelta
+
 import pytest
-from django.test import Client
 from django.contrib.auth.models import User
-from django.urls import reverse
 from django.contrib.messages import get_messages
+from django.test import Client
+from django.urls import reverse
+from django.utils import timezone
 
 from shortener.models import Link
 
@@ -110,6 +113,37 @@ def test_redirect_view_invalid(client):
     """測試無效的短網址返回 404。"""
     response = client.get('/invalid123')
     assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_redirect_view_expired_link(client, authenticated_user):
+    """測試過期的短網址返回 410 Gone。"""
+    link = Link.objects.create(
+        original_url="https://example.com",
+        short_code="expired1",
+        owner=authenticated_user,
+        expires_at=timezone.now() - timedelta(hours=1)
+    )
+
+    response = client.get(f'/{link.short_code}')
+    assert response.status_code == 410
+    assert 'expired.html' in [t.name for t in response.templates]
+
+
+@pytest.mark.django_db
+def test_redirect_view_not_expired_link(client, authenticated_user):
+    """測試未過期的短網址正常重導向。"""
+    link = Link.objects.create(
+        original_url="https://example.com",
+        short_code="active1",
+        owner=authenticated_user,
+        expires_at=timezone.now() + timedelta(days=7)
+    )
+
+    response = client.get(f'/{link.short_code}')
+    assert response.status_code == 302
+    assert response.url == link.original_url
+
 
 # ===== Shorten URL View Tests =====
 
