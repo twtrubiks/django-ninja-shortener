@@ -36,7 +36,10 @@ urlpatterns = [
     path('login/', auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
 
-    # Redirect
+    # Link Actions
+    path('links/<str:short_code>/refresh/', shortener_views.refresh_preview_view, name='refresh_preview'),
+
+    # Redirect (must be last due to catch-all pattern)
     path('<str:short_code>', shortener_views.redirect_view, name='redirect'),
 
     path("__reload__/", include("django_browser_reload.urls")),

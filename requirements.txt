@@ -10,3 +10,5 @@ pytest-cov==6.1.1
 pytest-django==4.11.1
 psycopg2-binary==2.9.11
 ruff # for format
+metadata_parser>=0.12.0
+lxml>=5.0.0  # 提升 metadata_parser 效能

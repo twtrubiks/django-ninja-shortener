@@ -10,59 +10,119 @@
   </div>
 
   {% if links %}
-    <div class="overflow-x-auto">
-      <table class="min-w-full bg-white">
-        <thead class="bg-gray-200">
-          <tr>
-            <th class="text-left py-3 px-4 uppercase font-semibold text-sm">原始網址</th>
-            <th class="text-left py-3 px-4 uppercase font-semibold text-sm">短網址</th>
-            <th class="text-center py-3 px-4 uppercase font-semibold text-sm">點擊</th>
-            <th class="text-center py-3 px-4 uppercase font-semibold text-sm">狀態</th>
-            <th class="text-left py-3 px-4 uppercase font-semibold text-sm">建立日期</th>
-            <th class="text-left py-3 px-4 uppercase font-semibold text-sm">過期時間</th>
-            <th class="text-left py-3 px-4 uppercase font-semibold text-sm">操作</th>
-          </tr>
-        </thead>
-        <tbody class="text-gray-700">
-          {% for link in links %}
-            <tr class="border-b {% if link.is_expired %}bg-red-50{% endif %}">
-              <td class="py-3 px-4">
-                <a href="{{ link.original_url }}" target="_blank" class="hover:underline truncate" title="{{ link.original_url }}">
-                  {{ link.original_url|truncatechars:40 }}
-                </a>
-              </td>
-              <td class="py-3 px-4">
-                <a href="{{ request.scheme }}://{{ request.get_host }}/{{ link.short_code }}" target="_blank" class="text-blue-600 hover:underline">
+    <div class="space-y-4">
+      {% for link in links %}
+        <div class="border rounded-lg p-4 {% if link.is_expired %}bg-red-50 border-red-200{% else %}bg-white{% endif %}">
+          <!-- 上方：連結資訊列 -->
+          <div class="flex flex-wrap items-center justify-between gap-4 mb-3">
+            <div class="flex-1 min-w-0">
+              <a href="{{ link.original_url }}" target="_blank"
+                 class="text-blue-600 hover:underline truncate block"
+                 title="{{ link.original_url }}">
+                {{ link.original_url|truncatechars:60 }}
+              </a>
+              <div class="text-sm text-gray-500 mt-1">
+                短網址：
+                <a href="{{ request.scheme }}://{{ request.get_host }}/{{ link.short_code }}"
+                   target="_blank" class="text-blue-500 hover:underline">
                   {{ request.scheme }}://{{ request.get_host }}/{{ link.short_code }}
                 </a>
-              </td>
-              <td class="text-center py-3 px-4">{{ link.click_count }}</td>
-              <td class="text-center py-3 px-4">
-                {% if link.is_expired %}
-                  <span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">已過期</span>
-                {% elif link.expires_at %}
-                  <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">有效</span>
-                {% else %}
-                  <span class="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded">永久</span>
-                {% endif %}
-              </td>
-              <td class="py-3 px-4">{{ link.created_at|date:"Y-m-d H:i" }}</td>
-              <td class="py-3 px-4">
-                {% if link.expires_at %}
-                  {{ link.expires_at|date:"Y-m-d H:i" }}
-                {% else %}
-                  -
-                {% endif %}
-              </td>
-              <td class="py-3 px-4">
-                <button onclick="copyToClipboard('{{ request.scheme }}://{{ request.get_host }}/{{ link.short_code }}')" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs py-1 px-2 rounded">
-                  複製
-                </button>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-4 text-sm">
+              <span class="text-gray-600">點擊：{{ link.click_count }}</span>
+
+              {% if link.is_expired %}
+                <span class="bg-red-100 text-red-800 px-2 py-1 rounded">已過期</span>
+              {% elif link.expires_at %}
+                <span class="bg-green-100 text-green-800 px-2 py-1 rounded">有效</span>
+              {% else %}
+                <span class="bg-gray-100 text-gray-800 px-2 py-1 rounded">永久</span>
+              {% endif %}
+
+              <button onclick="copyToClipboard('{{ request.scheme }}://{{ request.get_host }}/{{ link.short_code }}')"
+                      class="bg-gray-200 hover:bg-gray-300 text-gray-800 py-1 px-3 rounded">
+                複製
+              </button>
+            </div>
+          </div>
+
+          <!-- 下方：OG 預覽卡片 -->
+          {% if link.preview %}
+            <div class="border-t pt-3 mt-3">
+              {% if link.preview.fetch_status == 'success' and link.preview.has_preview_data %}
+                <!-- 成功抓取且有資料 -->
+                <div class="flex gap-4">
+                  {% if link.preview.og_image %}
+                    <div class="flex-shrink-0">
+                      <img src="{{ link.preview.og_image }}"
+                           alt="預覽圖片"
+                           class="w-24 h-24 object-cover rounded"
+                           onerror="this.style.display='none'">
+                    </div>
+                  {% endif %}
+                  <div class="flex-1 min-w-0">
+                    {% if link.preview.og_title %}
+                      <h4 class="font-medium text-gray-900 truncate">
+                        {{ link.preview.og_title|truncatechars:80 }}
+                      </h4>
+                    {% endif %}
+                    {% if link.preview.og_description %}
+                      <p class="text-sm text-gray-600 mt-1 line-clamp-2">
+                        {{ link.preview.og_description|truncatechars:150 }}
+                      </p>
+                    {% endif %}
+                    {% if link.preview.og_site_name %}
+                      <p class="text-xs text-gray-400 mt-1">
+                        {{ link.preview.og_site_name }}
+                      </p>
+                    {% endif %}
+                  </div>
+                </div>
+              {% elif link.preview.fetch_status == 'failed' %}
+                <!-- 抓取失敗 -->
+                <div class="flex items-center gap-2 text-sm text-orange-600">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <span>無法取得預覽：{{ link.preview.fetch_error|truncatechars:50 }}</span>
+                  <a href="{% url 'refresh_preview' link.short_code %}"
+                     class="ml-2 text-blue-500 hover:underline">
+                    重新抓取
+                  </a>
+                </div>
+              {% elif link.preview.fetch_status == 'pending' %}
+                <!-- 待處理 -->
+                <div class="text-sm text-gray-500">
+                  預覽資料處理中...
+                </div>
+              {% else %}
+                <!-- 成功但沒有 OG 資料 -->
+                <div class="flex items-center justify-between text-sm text-gray-400">
+                  <span>此網頁未提供預覽資訊</span>
+                  <a href="{% url 'refresh_preview' link.short_code %}"
+                     class="text-blue-500 hover:underline">
+                    重新抓取
+                  </a>
+                </div>
+              {% endif %}
+            </div>
+          {% else %}
+            <!-- 尚未抓取預覽 -->
+            <div class="border-t pt-3 mt-3">
+              <div class="flex items-center justify-between text-sm text-gray-400">
+                <span>尚未抓取預覽資料</span>
+                <a href="{% url 'refresh_preview' link.short_code %}"
+                   class="text-blue-500 hover:underline">
+                  抓取預覽
+                </a>
+              </div>
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
     </div>
   {% else %}
     <p class="text-center text-gray-500 mt-8">您尚未建立任何短網址。</p>
