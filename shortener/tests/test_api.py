@@ -2,7 +2,6 @@ from datetime import datetime, timedelta, timezone as tz
 
 import pytest
 from django.contrib.auth.models import User
-from ninja import NinjaAPI
 from ninja.testing import TestClient
 from ninja_jwt.tokens import RefreshToken
 
@@ -10,17 +9,8 @@ from ninja_shortener.api import api
 from shortener.models import Link
 
 
-@pytest.fixture(autouse=True)
-def reset_ninja_registry():
-    """
-    自動運行的 fixture，清除 Ninja 的內部註冊表以防止 ConfigError。
+# Fixture: reset_ninja_registry 已移至 conftest.py
 
-    這個 fixture 會在每個測試前後自動運行，確保測試之間不會互相影響。
-    """
-    yield
-    # 測試結束後清理註冊表
-    if hasattr(NinjaAPI, "_registry"):
-        NinjaAPI._registry = []
 
 @pytest.mark.django_db
 def test_authenticated_user_can_create_link():

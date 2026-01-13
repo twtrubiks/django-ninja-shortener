@@ -2,21 +2,13 @@ from datetime import timedelta
 
 import pytest
 from django.utils import timezone
-from ninja import NinjaAPI
 from ninja.testing import TestClient
 
 from ninja_shortener.api import api
 from shortener.models import Link
 
 
-@pytest.fixture(autouse=True)
-def reset_ninja_registry():
-    """
-    自動運行的 fixture，清除 Ninja 的內部註冊表以防止 ConfigError。
-    """
-    yield
-    if hasattr(NinjaAPI, "_registry"):
-        NinjaAPI._registry = []
+# Fixture: reset_ninja_registry 已移至 conftest.py
 
 
 @pytest.mark.django_db

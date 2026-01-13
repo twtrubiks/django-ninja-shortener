@@ -3,30 +3,14 @@ from datetime import timedelta
 import pytest
 from django.contrib.auth.models import User
 from django.contrib.messages import get_messages
-from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
 
 from shortener.models import Link
 
 
-@pytest.fixture
-def client():
-    """提供測試用的 Django 測試客戶端。"""
-    return Client()
+# Fixtures: client, authenticated_user, authenticated_client 已移至 conftest.py
 
-
-@pytest.fixture
-def authenticated_user():
-    """創建測試用的已認證用戶。"""
-    return User.objects.create_user(username="testuser", password="password123")
-
-
-@pytest.fixture
-def authenticated_client(client, authenticated_user):
-    """提供已登入的測試客戶端。"""
-    client.login(username="testuser", password="password123")
-    return client
 
 # ===== Home View Tests =====
 

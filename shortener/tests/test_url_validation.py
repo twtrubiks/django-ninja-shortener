@@ -1,6 +1,5 @@
 import pytest
 from django.core.exceptions import ValidationError
-from django.test import Client
 from django.urls import reverse
 from django.contrib.messages import get_messages
 
@@ -67,10 +66,7 @@ class TestValidateUrlScheme:
             validate_url_scheme("//example.com")
 
 
-@pytest.fixture
-def client():
-    """提供測試用的 Django 測試客戶端。"""
-    return Client()
+# Fixture: client 已移至 conftest.py
 
 
 @pytest.mark.django_db
