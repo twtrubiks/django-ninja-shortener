@@ -3,7 +3,10 @@
 {% block content %}
 <div class="bg-white p-8 rounded-lg shadow-md">
   <div class="flex justify-between items-center mb-6">
-    <h2 class="text-2xl font-bold">我的儀表板</h2>
+    <div>
+      <h2 class="text-2xl font-bold">我的儀表板</h2>
+      <p class="text-sm text-gray-500 mt-1">已使用 {{ page_obj.paginator.count }} / {{ max_links }} 個連結</p>
+    </div>
     <a href="{% url 'home' %}" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
       建立新短網址
     </a>
@@ -53,6 +56,10 @@
                 QR Code
               </button>
               {% endif %}
+              <button onclick="showDeleteModal('{{ link.short_code }}', '{{ link.original_url|truncatechars:30 }}')"
+                      class="bg-red-200 hover:bg-red-300 text-red-800 py-1 px-3 rounded">
+                刪除
+              </button>
             </div>
           </div>
 
@@ -132,6 +139,49 @@
         </div>
       {% endfor %}
     </div>
+
+    <!-- 分頁控制 -->
+    {% if page_obj.has_other_pages %}
+    <nav class="flex justify-center mt-8" aria-label="Pagination">
+      <ul class="flex items-center space-x-1">
+        {% if page_obj.has_previous %}
+          <li>
+            <a href="?page={{ page_obj.previous_page_number }}"
+               class="px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+              &laquo; 上一頁
+            </a>
+          </li>
+        {% else %}
+          <li>
+            <span class="px-3 py-2 rounded-md border border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed">
+              &laquo; 上一頁
+            </span>
+          </li>
+        {% endif %}
+
+        <li class="px-3 py-2 bg-blue-500 text-white rounded-md font-medium">
+          {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+        </li>
+
+        {% if page_obj.has_next %}
+          <li>
+            <a href="?page={{ page_obj.next_page_number }}"
+               class="px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+              下一頁 &raquo;
+            </a>
+          </li>
+        {% else %}
+          <li>
+            <span class="px-3 py-2 rounded-md border border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed">
+              下一頁 &raquo;
+            </span>
+          </li>
+        {% endif %}
+      </ul>
+    </nav>
+    <p class="text-center text-gray-500 text-sm mt-2">共 {{ page_obj.paginator.count }} 筆連結</p>
+    {% endif %}
+
   {% else %}
     <p class="text-center text-gray-500 mt-8">您尚未建立任何短網址。</p>
   {% endif %}
@@ -153,6 +203,32 @@
       <a id="qr-download-256" download class="bg-blue-500 hover:bg-blue-700 text-white py-2 px-4 rounded cursor-pointer">256px</a>
       <a id="qr-download-512" download class="bg-gray-200 hover:bg-gray-300 py-2 px-4 rounded cursor-pointer">512px</a>
     </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full mx-4">
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-lg font-bold text-red-600">確認刪除</h3>
+      <button onclick="closeDeleteModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+    </div>
+    <p class="text-gray-700 mb-2">您確定要刪除此連結嗎？</p>
+    <p id="delete-link-url" class="text-sm text-gray-500 mb-4 truncate"></p>
+    <p class="text-red-500 text-sm mb-4">此操作無法復原！</p>
+    <form id="delete-form" method="POST" action="">
+      {% csrf_token %}
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="closeDeleteModal()"
+                class="bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded">
+          取消
+        </button>
+        <button type="submit"
+                class="bg-red-500 hover:bg-red-700 text-white py-2 px-4 rounded">
+          確認刪除
+        </button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -185,14 +261,31 @@ function closeQRModal() {
   document.getElementById('qr-modal').classList.add('hidden');
 }
 
+function showDeleteModal(shortCode, originalUrl) {
+  document.getElementById('delete-link-url').textContent = originalUrl;
+  document.getElementById('delete-form').action = `/links/${shortCode}/delete/`;
+  document.getElementById('delete-modal').classList.remove('hidden');
+}
+
+function closeDeleteModal() {
+  document.getElementById('delete-modal').classList.add('hidden');
+}
+
 // 點擊背景關閉
 document.getElementById('qr-modal').addEventListener('click', function(e) {
   if (e.target === this) closeQRModal();
 });
 
+document.getElementById('delete-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeDeleteModal();
+});
+
 // ESC 鍵關閉 Modal
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeQRModal();
+  if (e.key === 'Escape') {
+    closeQRModal();
+    closeDeleteModal();
+  }
 });
 </script>
 {% endblock %}

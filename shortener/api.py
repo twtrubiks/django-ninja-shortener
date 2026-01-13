@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
@@ -105,6 +106,14 @@ class ErrorSchema(Schema):
     detail: str
 
 
+class LinkLimitExceededSchema(Schema):
+    """連結數量超出限制回應"""
+
+    detail: str
+    current_count: int
+    max_links: int
+
+
 class SlugAvailabilityResponse(Schema):
     """Slug 可用性檢查回應"""
 
@@ -184,7 +193,7 @@ def _link_to_response(link: Link) -> dict:
 
 @router.post(
     '/shorten',
-    response={200: LinkWithPreviewSchema, 409: ErrorSchema, 500: ErrorSchema},
+    response={200: LinkWithPreviewSchema, 403: LinkLimitExceededSchema, 409: ErrorSchema, 500: ErrorSchema},
     auth=JWTAuth(),
 )
 def shorten_url(request, payload: ShortenRequest):
@@ -192,11 +201,24 @@ def shorten_url(request, payload: ShortenRequest):
     建立短網址並同步抓取 OG 預覽資料
 
     - 需要 JWT 認證
+    - 每位用戶最多可建立 1000 個連結
     - 可選擇自訂 slug 或使用自動生成
     - 同步抓取目標網址的 Open Graph 資料
     - 如果抓取失敗，仍會建立短網址，但 preview.fetch_status 為 failed
     """
     owner = request.user
+
+    # 檢查用戶連結數量限制
+    max_links = getattr(settings, 'USER_MAX_LINKS', 1000)
+    current_count = Link.objects.filter(owner=owner).count()
+
+    if current_count >= max_links:
+        return 403, {
+            'detail': f'您已達到連結上限（{max_links} 個），請刪除部分連結後再試',
+            'current_count': current_count,
+            'max_links': max_links,
+        }
+
     custom_slug = payload.custom_slug
 
     try:
@@ -347,3 +369,25 @@ def check_slug_availability(request, slug: str):
         'available': True,
         'message': '此網址可以使用',
     }
+
+
+@router.delete(
+    '/links/{short_code}',
+    response={200: dict, 403: ErrorSchema, 404: ErrorSchema},
+    auth=JWTAuth(),
+)
+def delete_link(request, short_code: str):
+    """
+    刪除指定的短網址
+
+    - 需要 JWT 認證
+    - 只有連結擁有者可以刪除
+    """
+    link = get_object_or_404(Link, short_code=short_code)
+
+    # 權限檢查：只有擁有者可以刪除
+    if link.owner != request.user:
+        return JsonResponse({'detail': '您沒有權限刪除此連結'}, status=403)
+
+    link.delete()
+    return 200, {'detail': '連結已成功刪除', 'short_code': short_code}

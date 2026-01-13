@@ -1,9 +1,11 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.shortcuts import get_object_or_404, redirect, render
@@ -25,6 +27,9 @@ EXPIRES_IN_CHOICES = {
     '2592000': 2592000, # 30 天
 }
 
+# Dashboard 每頁顯示數量
+DASHBOARD_ITEMS_PER_PAGE = 25
+
 
 def home_view(request):
     context = {}
@@ -35,12 +40,21 @@ def home_view(request):
 
 @login_required
 def dashboard_view(request):
-    links = (
+    links_queryset = (
         Link.objects.filter(owner=request.user)
         .select_related('preview')  # 預載入 preview
         .order_by('-created_at')
     )
-    return render(request, 'dashboard.html', {'links': links})
+
+    paginator = Paginator(links_queryset, DASHBOARD_ITEMS_PER_PAGE)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'dashboard.html', {
+        'links': page_obj,
+        'page_obj': page_obj,
+        'max_links': getattr(settings, 'USER_MAX_LINKS', 1000),
+    })
 
 def redirect_view(request, short_code):
     link = get_object_or_404(Link, short_code=short_code)
@@ -68,6 +82,18 @@ def shorten_url_view(request):
                 return redirect('home')
 
             owner = request.user if request.user.is_authenticated else None
+
+            # 檢查用戶連結數量限制（僅登入用戶）
+            if owner is not None:
+                max_links = getattr(settings, 'USER_MAX_LINKS', 1000)
+                current_count = Link.objects.filter(owner=owner).count()
+
+                if current_count >= max_links:
+                    messages.error(
+                        request,
+                        f'您已達到連結上限（{max_links} 個），請刪除部分連結後再試'
+                    )
+                    return redirect('home')
 
             # 計算過期時間（僅登入用戶，使用白名單驗證）
             expires_at = None
@@ -168,4 +194,22 @@ def refresh_preview_view(request, short_code):
         messages.warning(request, f'抓取失敗：{e}')
 
     preview.save()
+    return redirect('dashboard')
+
+
+@login_required
+def delete_link_view(request, short_code):
+    """刪除連結"""
+    if request.method != 'POST':
+        return redirect('dashboard')
+
+    link = get_object_or_404(Link, short_code=short_code)
+
+    # 權限檢查
+    if link.owner != request.user:
+        messages.error(request, '您沒有權限刪除此連結')
+        return redirect('dashboard')
+
+    link.delete()
+    messages.success(request, '連結已成功刪除')
     return redirect('dashboard')

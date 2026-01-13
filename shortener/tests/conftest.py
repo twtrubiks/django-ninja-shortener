@@ -109,3 +109,19 @@ def ninja_authenticated_client(test_user):
     refresh = RefreshToken.for_user(test_user)
     token = str(refresh.access_token)
     return TestClient(api, headers={'Authorization': f'Bearer {token}'})
+
+
+# =============================================================================
+# 設定 Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def small_link_limit(settings):
+    """
+    測試用小型連結上限
+
+    適用於：測試連結數量限制功能，避免建立過多測試資料
+    """
+    settings.USER_MAX_LINKS = 5
+    return 5

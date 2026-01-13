@@ -147,3 +147,155 @@ def test_create_link_without_expires_at():
     # 驗證資料庫記錄
     link = Link.objects.get(original_url=original_url)
     assert link.expires_at is None
+
+
+# ===== User Link Limit Tests (API) =====
+
+@pytest.mark.django_db
+def test_user_link_limit_reached_api(test_user, ninja_authenticated_client, small_link_limit):
+    """
+    測試 API - 用戶達到連結上限時回傳 403。
+
+    驗證：
+    - HTTP 狀態碼為 403
+    - 回應包含正確的錯誤訊息和數量資訊
+    """
+    # 建立連結達到上限
+    for i in range(small_link_limit):
+        Link.objects.create(
+            original_url=f"https://example{i}.com",
+            short_code=f"limit{i:03d}",
+            owner=test_user
+        )
+
+    # 嘗試建立新連結
+    response = ninja_authenticated_client.post(
+        "/shorten",
+        json={"original_url": "https://newsite.com"}
+    )
+
+    assert response.status_code == 403
+    response_json = response.json()
+    assert 'detail' in response_json
+    assert '上限' in response_json['detail']
+    assert response_json['current_count'] == small_link_limit
+    assert response_json['max_links'] == small_link_limit
+
+
+@pytest.mark.django_db
+def test_user_link_limit_not_reached_api(test_user, ninja_authenticated_client, small_link_limit):
+    """
+    測試 API - 未達上限時可以正常建立連結。
+
+    驗證：
+    - HTTP 狀態碼為 200
+    - 連結成功建立
+    """
+    # 建立少於上限的連結
+    for i in range(small_link_limit - 1):
+        Link.objects.create(
+            original_url=f"https://example{i}.com",
+            short_code=f"under{i:03d}",
+            owner=test_user
+        )
+
+    # 應該可以建立新連結
+    response = ninja_authenticated_client.post(
+        "/shorten",
+        json={"original_url": "https://newsite.com"}
+    )
+
+    assert response.status_code == 200
+    response_json = response.json()
+    assert response_json['original_url'] == "https://newsite.com/"
+    assert 'short_code' in response_json
+
+    # 驗證連結已建立
+    assert Link.objects.filter(owner=test_user).count() == small_link_limit
+
+
+# ===== Delete Link API Tests =====
+
+@pytest.mark.django_db
+def test_delete_link_api_success(test_user, ninja_authenticated_client):
+    """
+    測試 API - 擁有者可以成功刪除自己的連結。
+
+    驗證：
+    - HTTP 狀態碼為 200
+    - 連結已從資料庫刪除
+    """
+    link = Link.objects.create(
+        original_url="https://example.com/api-delete",
+        short_code="apidel01",
+        owner=test_user
+    )
+
+    response = ninja_authenticated_client.delete(f"/links/{link.short_code}")
+
+    assert response.status_code == 200
+    response_json = response.json()
+    assert '成功刪除' in response_json['detail']
+    assert response_json['short_code'] == 'apidel01'
+    assert not Link.objects.filter(short_code="apidel01").exists()
+
+
+@pytest.mark.django_db
+def test_delete_link_api_permission_denied(test_user, ninja_authenticated_client):
+    """
+    測試 API - 用戶無法刪除他人的連結。
+
+    驗證：
+    - HTTP 狀態碼為 403
+    - 連結仍然存在
+    """
+    other_user = User.objects.create_user(username="apiother", password="password123")
+    link = Link.objects.create(
+        original_url="https://example.com/api-others",
+        short_code="apioth01",
+        owner=other_user
+    )
+
+    response = ninja_authenticated_client.delete(f"/links/{link.short_code}")
+
+    assert response.status_code == 403
+    response_json = response.json()
+    assert '沒有權限' in response_json['detail']
+    # 連結應該仍然存在
+    assert Link.objects.filter(short_code="apioth01").exists()
+
+
+@pytest.mark.django_db
+def test_delete_link_api_not_found(ninja_authenticated_client):
+    """
+    測試 API - 刪除不存在的連結返回 404。
+    """
+    response = ninja_authenticated_client.delete("/links/notexist")
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_delete_link_api_unauthenticated():
+    """
+    測試 API - 未認證用戶無法刪除連結。
+
+    驗證：
+    - HTTP 狀態碼為 401
+    - 連結仍然存在
+    """
+    from ninja.testing import TestClient
+    from ninja_shortener.api import api
+
+    user = User.objects.create_user(username="unauthtest", password="password123")
+    link = Link.objects.create(
+        original_url="https://example.com/unauth",
+        short_code="unauth01",
+        owner=user
+    )
+
+    client = TestClient(api)
+    response = client.delete(f"/links/{link.short_code}")
+
+    assert response.status_code == 401
+    # 連結應該仍然存在
+    assert Link.objects.filter(short_code="unauth01").exists()

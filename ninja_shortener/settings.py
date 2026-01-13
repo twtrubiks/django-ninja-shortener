@@ -204,3 +204,6 @@ RESERVED_SLUGS = frozenset({
     'settings', 'profile', 'account', 'user', 'users', 'new', 'edit',
     'delete', 'search', 'home', 'index', 'favicon', 'robots',
 })
+
+# 每位用戶最多可建立的連結數量
+USER_MAX_LINKS = 1000
