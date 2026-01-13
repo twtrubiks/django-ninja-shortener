@@ -7,7 +7,8 @@ from .validators import validate_url_scheme
 
 class Link(models.Model):
     original_url = models.URLField(validators=[validate_url_scheme])
-    short_code = models.CharField(max_length=15, unique=True, db_index=True)
+    short_code = models.CharField(max_length=50, unique=True, db_index=True)
+    is_custom_slug = models.BooleanField(default=False)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     click_count = models.IntegerField(default=0)

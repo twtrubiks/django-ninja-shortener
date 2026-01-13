@@ -31,6 +31,23 @@
     </div>
     {% if user.is_authenticated %}
     <div class="mt-4">
+      <label class="block text-gray-700 text-sm font-bold mb-2">自訂網址（選填）</label>
+      <div class="flex items-center">
+        <span class="text-gray-500 mr-2">{{ request.get_host }}/</span>
+        <input type="text"
+               id="custom_slug"
+               name="custom_slug"
+               pattern="[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]|[a-zA-Z0-9]"
+               minlength="3"
+               maxlength="50"
+               placeholder="my-custom-link"
+               class="flex-1 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500">
+      </div>
+      <p id="slug-status" class="text-xs text-gray-500 mt-1">
+        只能使用英文字母、數字和連字號，3-50 字元
+      </p>
+    </div>
+    <div class="mt-4">
       <label class="block text-gray-700 text-sm font-bold mb-2">過期時間</label>
       <select name="expires_in" class="w-full border border-gray-300 rounded px-3 py-2">
         <option value="">永久</option>
@@ -64,5 +81,58 @@ function copyToClipboard(text) {
     alert('複製失敗: ', err);
   });
 }
+
+{% if user.is_authenticated %}
+// 即時檢查 slug 可用性
+(function() {
+  const slugInput = document.getElementById('custom_slug');
+  const statusEl = document.getElementById('slug-status');
+  let debounceTimer;
+
+  if (!slugInput || !statusEl) return;
+
+  slugInput.addEventListener('input', function() {
+    clearTimeout(debounceTimer);
+    const slug = this.value.trim();
+
+    if (!slug) {
+      statusEl.textContent = '只能使用英文字母、數字和連字號，3-50 字元';
+      statusEl.className = 'text-xs text-gray-500 mt-1';
+      return;
+    }
+
+    if (slug.length < 3) {
+      statusEl.textContent = '自訂網址必須至少 3 個字元';
+      statusEl.className = 'text-xs text-red-500 mt-1';
+      return;
+    }
+
+    // 使用 debounce 避免過多請求
+    debounceTimer = setTimeout(function() {
+      statusEl.textContent = '檢查中...';
+      statusEl.className = 'text-xs text-gray-500 mt-1';
+
+      // 取得 JWT token（從 cookie 或其他來源）
+      // 對於 Web 表單，我們直接送出表單讓後端驗證
+      // 這裡只做前端格式驗證
+      const pattern = /^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$/;
+      if (!pattern.test(slug)) {
+        statusEl.textContent = '格式錯誤：只能使用英文字母、數字和連字號，且不能以連字號開頭或結尾';
+        statusEl.className = 'text-xs text-red-500 mt-1';
+        return;
+      }
+
+      if (slug.includes('--')) {
+        statusEl.textContent = '格式錯誤：不能包含連續的連字號';
+        statusEl.className = 'text-xs text-red-500 mt-1';
+        return;
+      }
+
+      statusEl.textContent = '格式正確！送出後將檢查是否可用';
+      statusEl.className = 'text-xs text-green-500 mt-1';
+    }, 300);
+  });
+})();
+{% endif %}
 </script>
 {% endblock %}

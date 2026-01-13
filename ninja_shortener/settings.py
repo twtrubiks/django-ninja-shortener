@@ -192,3 +192,15 @@ NINJA_JWT = {
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
+
+
+# 短網址保留字清單（這些 slug 不允許使用者自訂）
+RESERVED_SLUGS = frozenset({
+    # 系統路由
+    'admin', 'api', 'dashboard', 'login', 'logout', 'register',
+    'shorten', 'links', 'refresh', 'static', 'media', '__reload__',
+    # 常見保留字
+    'www', 'help', 'support', 'about', 'terms', 'privacy', 'contact',
+    'settings', 'profile', 'account', 'user', 'users', 'new', 'edit',
+    'delete', 'search', 'home', 'index', 'favicon', 'robots',
+})

@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -15,6 +15,7 @@ from .models import Link, LinkPreview
 from .og_parser import OGParserError, fetch_og_data
 from .qr_utils import generate_qr_code
 from .utils import generate_short_code_from_id
+from .validators import validate_custom_slug
 
 router = Router(tags=['shorteners'])
 
@@ -24,7 +25,15 @@ router = Router(tags=['shorteners'])
 
 class ShortenRequest(Schema):
     original_url: HttpUrl
+    custom_slug: Optional[str] = None
     expires_at: Optional[datetime] = None
+
+    @field_validator('custom_slug')
+    @classmethod
+    def validate_slug(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == '':
+            return None
+        return validate_custom_slug(v)
 
 
 class QRCodeParams(Schema):
@@ -81,12 +90,27 @@ class LinkWithPreviewSchema(Schema):
 
     original_url: str
     short_code: str
+    is_custom_slug: bool
     owner: Optional[int]
     created_at: datetime
     click_count: int
     last_clicked_at: Optional[datetime]
     expires_at: Optional[datetime]
     preview: Optional[LinkPreviewSchema]
+
+
+class ErrorSchema(Schema):
+    """錯誤回應格式"""
+
+    detail: str
+
+
+class SlugAvailabilityResponse(Schema):
+    """Slug 可用性檢查回應"""
+
+    slug: str
+    available: bool
+    message: str
 
 
 # ========== Helper Functions ==========
@@ -145,6 +169,7 @@ def _link_to_response(link: Link) -> dict:
     return {
         'original_url': link.original_url,
         'short_code': link.short_code,
+        'is_custom_slug': link.is_custom_slug,
         'owner': link.owner_id,
         'created_at': link.created_at,
         'click_count': link.click_count,
@@ -157,29 +182,56 @@ def _link_to_response(link: Link) -> dict:
 # ========== API Endpoints ==========
 
 
-@router.post('/shorten', response=LinkWithPreviewSchema, auth=JWTAuth())
+@router.post(
+    '/shorten',
+    response={200: LinkWithPreviewSchema, 409: ErrorSchema, 500: ErrorSchema},
+    auth=JWTAuth(),
+)
 def shorten_url(request, payload: ShortenRequest):
     """
     建立短網址並同步抓取 OG 預覽資料
 
     - 需要 JWT 認證
+    - 可選擇自訂 slug 或使用自動生成
     - 同步抓取目標網址的 Open Graph 資料
     - 如果抓取失敗，仍會建立短網址，但 preview.fetch_status 為 failed
     """
     owner = request.user
+    custom_slug = payload.custom_slug
 
-    with transaction.atomic():
-        # 先建立記錄（使用 UUID 作為暫時值，避免 unique 約束衝突）
-        link = Link.objects.create(
-            original_url=str(payload.original_url),
-            short_code=str(uuid.uuid4())[:15],
-            owner=owner,
-            expires_at=payload.expires_at,
-        )
+    try:
+        with transaction.atomic():
+            if custom_slug:
+                # 樂觀檢查：大多數情況有效
+                if Link.objects.filter(short_code=custom_slug).exists():
+                    return 409, {'detail': f'網址「{custom_slug}」已被使用，請選擇其他名稱'}
 
-        # 使用資料庫 ID 生成短碼（零碰撞）
-        link.short_code = generate_short_code_from_id(link.id)
-        link.save(update_fields=['short_code'])
+                link = Link.objects.create(
+                    original_url=str(payload.original_url),
+                    short_code=custom_slug,
+                    is_custom_slug=True,
+                    owner=owner,
+                    expires_at=payload.expires_at,
+                )
+            else:
+                # 使用 Sqids 自動生成（現有邏輯）
+                link = Link.objects.create(
+                    original_url=str(payload.original_url),
+                    short_code=str(uuid.uuid4())[:15],  # 暫時值
+                    is_custom_slug=False,
+                    owner=owner,
+                    expires_at=payload.expires_at,
+                )
+                # 使用資料庫 ID 生成短碼（零碰撞）
+                link.short_code = generate_short_code_from_id(link.id)
+                link.save(update_fields=['short_code'])
+    except IntegrityError:
+        # 後備：處理競態條件（兩個請求同時創建相同 slug）
+        if custom_slug:
+            return 409, {'detail': f'網址「{custom_slug}」已被使用，請選擇其他名稱'}
+        else:
+            # Sqids 生成的短碼理論上不會重複，如果發生表示系統異常
+            return 500, {'detail': '系統發生錯誤，請稍後再試'}
 
     # 同步抓取 OG 資料（在 transaction 外執行）
     _fetch_and_save_preview(link)
@@ -187,7 +239,7 @@ def shorten_url(request, payload: ShortenRequest):
     # 重新載入 link 以取得 preview 關聯
     link.refresh_from_db()
 
-    return _link_to_response(link)
+    return 200, _link_to_response(link)
 
 
 @router.post(
@@ -262,3 +314,36 @@ def get_qr_code(request, short_code: str, params: QRCodeParams = Query(...)):
     )
 
     return HttpResponse(buffer, content_type='image/png')
+
+
+@router.get('/check-slug/{slug}', response=SlugAvailabilityResponse, auth=JWTAuth())
+def check_slug_availability(request, slug: str):
+    """
+    即時檢查 slug 是否可用
+
+    - 需要 JWT 認證
+    - 檢查格式、保留字和唯一性
+    """
+    # 格式和保留字驗證
+    try:
+        validated_slug = validate_custom_slug(slug)
+    except ValueError as e:
+        return {
+            'slug': slug,
+            'available': False,
+            'message': str(e),
+        }
+
+    # 資料庫唯一性檢查
+    if Link.objects.filter(short_code=validated_slug).exists():
+        return {
+            'slug': validated_slug,
+            'available': False,
+            'message': f'網址「{validated_slug}」已被使用',
+        }
+
+    return {
+        'slug': validated_slug,
+        'available': True,
+        'message': '此網址可以使用',
+    }
