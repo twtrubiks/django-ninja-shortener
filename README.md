@@ -6,7 +6,7 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 
 使用者可以註冊登入後，將網址縮短，可追蹤每個短網址的點擊次數。
 
-本專案使用 [Cline](https://github.com/twtrubiks/mcp-vscode-cline?tab=readme-ov-file#cline) 協助完成, 可參考 [.clinerules/01_doc.md](.clinerules/01_doc.md)
+~~本專案使用 [Cline](https://github.com/twtrubiks/mcp-vscode-cline?tab=readme-ov-file#cline) 協助完成, 可參考 [.clinerules/01_doc.md](.clinerules/01_doc.md)~~ 目前改用 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 開發
 
 ## 畫面截圖
 
@@ -14,18 +14,26 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 
 ![alt tag](https://cdn.imgpile.com/f/qPDKjsy_xl.png)
 
-如果註冊可以追蹤點擊
+如果註冊可以有更多功能, 像是 點擊次數, 設定過期日期, 自定義網址, QRCODE
 
-![alt tag](https://cdn.imgpile.com/f/4R3cy01_xl.png)
+![alt tag](https://cdn.imgpile.com/f/0oOzE2J_xl.png)
+
+![alt tag](https://cdn.imgpile.com/f/NdaNWkE_xl.png)
 
 ## ✨ 功能亮點
 
-* **使用者認證**：支援使用者註冊、登入、登出。
-* **建立短網址**：登入後的使用者可以為長網址產生一個獨一無二的短網址。
-* **短網址重定向**：點擊短網址會將使用者重新導向至原始的長網址。
+* **使用者認證**：支援使用者註冊、登入、登出，使用 JWT 進行 API 認證。
+* **建立短網址**：支援匿名用戶建立短網址，登入用戶享有更多功能。
+* **自訂短網址 Slug**：登入用戶可自訂短網址後綴（3-50 字元），支援格式驗證與保留字過濾。
+* **短網址過期機制**：可設定短網址過期時間（1 小時、1 天、7 天、30 天或永久）。
+* **短網址重定向**：點擊短網址會將使用者重新導向至原始的長網址，使用原子性更新防止競態條件。
 * **點擊次數追蹤**：系統會自動計算每個短網址被點擊的次數。
-* **個人儀表板**：使用者可以查看自己建立的所有短網址及其點擊統計。
-* **RESTful API**：提供 API 端點以程式化方式建立短網址。
+* **Open Graph 預覽**：自動抓取目標網頁的 OG 資料（標題、描述、圖片），並支援手動刷新。
+* **QR Code 生成**：為每個短網址生成 QR Code，支援多種尺寸（128/256/512px）和自訂顏色。
+* **個人儀表板**：分頁顯示用戶的所有短網址及其統計資料，支援連結刪除功能。
+* **連結數量限制**：每位登入用戶最多可建立 1000 個連結。
+* **RESTful API**：完整的 API 端點，使用 JWT 認證。
+* **安全防護**：SSRF 防護、URL 協議驗證、CSRF 保護、TOCTOU 競態條件防護。
 * **Docker 支援**：提供 Dockerfile 和 Docker Compose 設定，簡化開發與部署流程。
 
 ## 🛠️ 技術棧
@@ -34,10 +42,12 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 * **API 框架**：[Django Ninja](https://github.com/twtrubiks/django_ninja_tutorial)
 * **前端樣式**：[Tailwind CSS](https://tailwindcss.com/) (透過 `django-tailwind` 整合)
 * **資料庫**：
-  * 開發環境：SQLite (預設)
-  * 生產環境：可輕鬆替換為 PostgreSQL (已在 `settings.py` 中預留設定)
+  * 預設：PostgreSQL（透過 Docker Compose）
+  * 備用：SQLite（已在 `settings.py` 中預留設定）
 * **短網址代碼**：使用 [Sqids](https://sqids.org/) 從資料庫 ID 生成（零碰撞設計）
-* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)
+* **QR Code**：使用 [Segno](https://segno.readthedocs.io/) 生成 QR Code
+* **OG 解析**：使用 [metadata_parser](https://github.com/jvanasco/metadata_parser) 解析 Open Graph 資料
+* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)（109 個測試案例，93% 覆蓋率）
 * **容器化**：[Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 快速啟動 (使用 Docker, 建議用這個)
@@ -183,26 +193,42 @@ ninja_shortener/
 ├── docker-compose.yml
 ├── manage.py
 ├── requirements.txt
-├── ninja_shortener/      # Django 專案設定
-│   ├── settings.py
-│   └── urls.py
-├── shortener/            # 核心短網址應用
-│   ├── models.py         # 資料庫模型 (Link)
-│   ├── api.py            # Django Ninja API 端點
-│   ├── views.py          # 頁面視圖與重定向邏輯
-│   └── utils.py          # 短代碼生成工具
-└── theme/                # Django 主題與模板
-    ├── templates/        # HTML 模板
-    └── static_src/       # Tailwind CSS 原始檔
+├── pytest.ini                # Pytest 設定
+├── ninja_shortener/          # Django 專案設定
+│   ├── settings.py           # Django 設定（JWT、資料庫、應用註冊）
+│   ├── urls.py               # URL 路由配置
+│   └── api.py                # API 整合點（NinjaExtraAPI）
+├── shortener/                # 核心短網址應用
+│   ├── models.py             # 資料庫模型（Link、LinkPreview）
+│   ├── api.py                # Django Ninja API 端點
+│   ├── views.py              # 頁面視圖與重定向邏輯
+│   ├── utils.py              # 短碼生成工具（Sqids）
+│   ├── validators.py         # 驗證器（URL、自訂 slug）
+│   ├── og_parser.py          # Open Graph 資料抓取（含 SSRF 防護）
+│   ├── qr_utils.py           # QR Code 生成工具
+│   └── tests/                # 測試套件
+│       ├── conftest.py       # pytest fixtures 集中管理
+│       ├── test_api.py       # API 端點測試
+│       ├── test_models.py    # 資料模型測試
+│       ├── test_views.py     # 視圖測試
+│       └── ...               # 其他測試檔案
+└── theme/                    # Django 主題與模板
+    ├── templates/            # HTML 模板
+    │   ├── home.html         # 首頁（短網址建立）
+    │   ├── dashboard.html    # 儀表板（用戶連結管理）
+    │   └── expired.html      # 過期連結頁面
+    └── static_src/           # Tailwind CSS 原始檔
 ```
 
 ## 💡 未來展望
 
-* **切換至 PostgreSQL**：為生產環境準備更穩健的資料庫。(已完成)
+* **切換至 PostgreSQL**：為生產環境準備更穩健的資料庫。✅ 已完成
 * **詳細的分析儀表板**：提供更多點擊數據，如時間、來源、地理位置等。
-* **自訂短網址**：允許使用者自訂短網址的代碼。
-* **QR Code 產生**：為每個短網址產生對應的 QR Code。
-* **非同步任務**：使用 Celery 處理耗時任務，如數據分析。
+* **自訂短網址**：允許使用者自訂短網址的代碼。✅ 已完成
+* **QR Code 產生**：為每個短網址產生對應的 QR Code。✅ 已完成
+* **OG 抓取異步化**：將 Open Graph 資料抓取改為異步處理（Celery + Redis 或 Huey），避免阻塞 API 請求。
+* **快取層**：使用 Redis 快取熱門連結和 OG 預覽資料。
+* **API 速率限制**：實作 rate limiting 防止濫用。
 
 ## Donation
 

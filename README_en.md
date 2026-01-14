@@ -1,10 +1,12 @@
 # Django Ninja Shortener - A Bitly-like URL Shortener Service
 
+[中文版](README.md)
+
 A modern URL shortener service built with Django, Django Ninja, and Tailwind CSS, inspired by Bitly.
 
 Users can register and log in to shorten URLs and track the click count for each short link.
 
-This project was completed with assistance from [Cline](https://github.com/twtrubiks/mcp-vscode-cline?tab=readme-ov-file#cline). For reference, see [.clinerules/01\_doc.md](.clinerules/01_doc.md)
+~~This project was completed with assistance from [Cline](https://github.com/twtrubiks/mcp-vscode-cline?tab=readme-ov-file#cline). For reference, see [.clinerules/01_doc.md](.clinerules/01_doc.md)~~ Currently developed with [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 
 ## Screenshots
 
@@ -12,31 +14,41 @@ URL Shortener Page (Usable without registration)
 
 ![alt tag](https://cdn.imgpile.com/f/qPDKjsy_xl.png)
 
-Track clicks after registration
+With registration, you get more features like click tracking, expiration dates, custom URLs, and QR codes
 
-![alt tag](https://cdn.imgpile.com/f/4R3cy01_xl.png)
+![alt tag](https://cdn.imgpile.com/f/0oOzE2J_xl.png)
+
+![alt tag](https://cdn.imgpile.com/f/NdaNWkE_xl.png)
 
 ## ✨ Key Features
 
-  * **User Authentication**: Supports user registration, login, and logout.
-  * **Create Short URLs**: Logged-in users can generate a unique short URL for a long URL.
-  * **Short URL Redirection**: Clicking a short URL redirects the user to the original long URL.
-  * **Click Tracking**: The system automatically counts the number of clicks for each short URL.
-  * **Personal Dashboard**: Users can view all the short URLs they have created and their click statistics.
-  * **RESTful API**: Provides API endpoints to create short URLs programmatically.
-  * **Docker Support**: Includes a Dockerfile and Docker Compose setup to simplify development and deployment.
+* **User Authentication**: Supports user registration, login, and logout, using JWT for API authentication.
+* **Create Short URLs**: Anonymous users can create short URLs, logged-in users enjoy more features.
+* **Custom Short URL Slug**: Logged-in users can customize the URL suffix (3-50 characters), with format validation and reserved word filtering.
+* **Short URL Expiration**: Set expiration time for short URLs (1 hour, 1 day, 7 days, 30 days, or permanent).
+* **Short URL Redirection**: Clicking a short URL redirects the user to the original long URL, using atomic updates to prevent race conditions.
+* **Click Tracking**: The system automatically counts the number of clicks for each short URL.
+* **Open Graph Preview**: Automatically fetches OG data (title, description, image) from target pages, with manual refresh support.
+* **QR Code Generation**: Generate QR codes for each short URL, supporting multiple sizes (128/256/512px) and custom colors.
+* **Personal Dashboard**: Paginated display of all user's short URLs and statistics, with link deletion support.
+* **Link Limit**: Each logged-in user can create up to 1000 links.
+* **RESTful API**: Complete API endpoints with JWT authentication.
+* **Security Protection**: SSRF protection, URL protocol validation, CSRF protection, TOCTOU race condition prevention.
+* **Docker Support**: Includes Dockerfile and Docker Compose setup to simplify development and deployment.
 
 ## 🛠️ Tech Stack
 
-  * **Backend Framework**: [Django](https://github.com/twtrubiks/django-tutorial)
-  * **API Framework**: [Django Ninja](https://github.com/twtrubiks/django_ninja_tutorial)
-  * **Frontend Styling**: [Tailwind CSS](https://tailwindcss.com/) (integrated via `django-tailwind`)
-  * **Database**:
-      * Development: SQLite (default)
-      * Production: Easily switchable to PostgreSQL (configuration provided in `settings.py`)
-  * **Short Code Generation**: Uses [Sqids](https://sqids.org/) to generate from database ID (zero collision design)
-  * **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial)
-  * **Containerization**: [Docker](https://github.com/twtrubiks/docker-tutorial)
+* **Backend Framework**: [Django](https://github.com/twtrubiks/django-tutorial)
+* **API Framework**: [Django Ninja](https://github.com/twtrubiks/django_ninja_tutorial)
+* **Frontend Styling**: [Tailwind CSS](https://tailwindcss.com/) (integrated via `django-tailwind`)
+* **Database**:
+  * Default: PostgreSQL (via Docker Compose)
+  * Alternative: SQLite (configuration provided in `settings.py`)
+* **Short Code Generation**: Uses [Sqids](https://sqids.org/) to generate from database ID (zero collision design)
+* **QR Code**: Uses [Segno](https://segno.readthedocs.io/) for QR code generation
+* **OG Parsing**: Uses [metadata_parser](https://github.com/jvanasco/metadata_parser) for Open Graph data parsing
+* **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial) (109 test cases, 93% coverage)
+* **Containerization**: [Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 Quick Start (Using Docker, Recommended)
 
@@ -44,7 +56,8 @@ This is the recommended way to get started, as it ensures a consistent developme
 
 **Setup Steps:**
 
-1.  **Start the services:**
+1. **Start the services:**
+
     Use Docker Compose to start all services with a single command.
 
     ```bash
@@ -53,17 +66,19 @@ This is the recommended way to get started, as it ensures a consistent developme
 
     This command will build the Docker image, install dependencies, run database migrations, and start the development server.
 
-2.  **Create a superuser (Optional):**
+2. **Create a superuser (Optional):**
+
     To access the Django Admin, run the following command in a separate terminal:
 
     ```bash
     docker compose exec django-ninja python manage.py createsuperuser
     ```
 
-3.  **Access the application:**
+3. **Access the application:**
 
-      * **Website Homepage**: [http://localhost:8000](https://www.google.com/search?q=http://localhost:8000)
-      * **API Documentation (Swagger UI)**: [http://localhost:8000/api/docs](https://www.google.com/search?q=http://localhost:8000/api/docs)
+    * **Website Homepage**: [http://localhost:8000](http://localhost:8000)
+
+    * **API Documentation (Swagger UI)**: [http://localhost:8000/api/docs](http://localhost:8000/api/docs)
 
 ## 🔧 Local Development (Without Docker)
 
@@ -71,25 +86,26 @@ If you prefer to set up the environment directly on your local machine.
 
 **Prerequisites:**
 
-  * Python 3.12
-  * Node.js and npm (for Tailwind CSS)
+* Python 3.12
+* Node.js and npm (for Tailwind CSS)
 
 **Setup Steps:**
 
-1.  **Create and activate a virtual environment:**
+1. **Create and activate a virtual environment:**
 
     ```bash
     python -m venv venv
     source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
     ```
 
-2.  **Install Python dependencies:**
+2. **Install Python dependencies:**
 
     ```bash
     pip install -r requirements.txt
     ```
 
-3.  **Install and configure Tailwind CSS:**
+3. **Install and configure Tailwind CSS:**
+
     `django-tailwind` handles most of the setup.
 
     ```bash
@@ -98,22 +114,21 @@ If you prefer to set up the environment directly on your local machine.
 
     For more details, see [https://django-tailwind.readthedocs.io/en/latest/installation.html](https://django-tailwind.readthedocs.io/en/latest/installation.html)
 
-4.  **Run database migrations:**
+4. **Run database migrations:**
 
     ```bash
     python manage.py migrate
     ```
 
-5.  **Create a superuser (Optional):**
+5. **Create a superuser (Optional):**
 
     ```bash
     python manage.py createsuperuser
     ```
 
-6.  **Start the development servers:**
-    You need to start both the Django server and the Tailwind CSS compiler.
+6. **Start the development servers:**
 
-    In one terminal:
+    You need to start both the Django server and the Tailwind CSS compiler.
 
     ```bash
     python manage.py runserver
@@ -125,18 +140,19 @@ If you prefer to set up the environment directly on your local machine.
     python manage.py tailwind start
     ```
 
-7.  **Access the application:**
+7. **Access the application:**
 
-      * **Website Homepage**: [http://localhost:8000](https://www.google.com/search?q=http://localhost:8000)
-      * **API Documentation (Swagger UI)**: [http://localhost:8000/api/docs](https://www.google.com/search?q=http://localhost:8000/api/docs)
+    * **Website Homepage**: [http://localhost:8000](http://localhost:8000)
+
+    * **API Documentation (Swagger UI)**: [http://localhost:8000/api/docs](http://localhost:8000/api/docs)
 
 ## 🧪 Running Tests
 
 This project uses `pytest` for testing and measures test coverage.
 
-The testing plan can be found in [TESTING\_PLAN.md](TESTING_PLAN.md).
+The testing plan can be found in [TESTING_PLAN.md](TESTING_PLAN.md).
 
-  * **Run tests using Docker:**
+* **Run tests using Docker:**
 
     ```bash
     docker compose --profile testing up
@@ -144,7 +160,7 @@ The testing plan can be found in [TESTING\_PLAN.md](TESTING_PLAN.md).
 
     A test coverage report will be generated at `htmlcov/index.html`.
 
-  * **Run tests locally:**
+* **Run tests locally:**
 
     ```bash
     # Ensure development dependencies are installed
@@ -157,7 +173,7 @@ The testing plan can be found in [TESTING\_PLAN.md](TESTING_PLAN.md).
 
 The API provides a programmatic way to interact with the URL shortener service. All API endpoints are under the `/api/` path.
 
-For the best experience, please visit the **API Documentation (Swagger UI)** at [http://localhost:8000/api/docs](https://www.google.com/search?q=http://localhost:8000/api/docs).
+For the best experience, please visit the **API Documentation (Swagger UI)** at [http://localhost:8000/api/docs](http://localhost:8000/api/docs).
 
 ![alt tag](https://cdn.imgpile.com/f/Foa4p5C_md.png)
 
@@ -171,32 +187,48 @@ Then, paste the token into the top right corner to authorize your API calls.
 
 ## 📂 Project Structure
 
-```plaintext
+```cmd
 ninja_shortener/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── manage.py
 ├── requirements.txt
-├── ninja_shortener/      # Django project configuration
-│   ├── settings.py
-│   └── urls.py
-├── shortener/            # Core shortener application
-│   ├── models.py         # Database models (Link)
-│   ├── api.py            # Django Ninja API endpoints
-│   ├── views.py          # Page views and redirection logic
-│   └── utils.py          # Short code generation utility
-└── theme/                # Django theme and templates
-    ├── templates/        # HTML templates
-    └── static_src/       # Tailwind CSS source files
+├── pytest.ini                # Pytest configuration
+├── ninja_shortener/          # Django project configuration
+│   ├── settings.py           # Django settings (JWT, database, app registration)
+│   ├── urls.py               # URL routing configuration
+│   └── api.py                # API integration point (NinjaExtraAPI)
+├── shortener/                # Core shortener application
+│   ├── models.py             # Database models (Link, LinkPreview)
+│   ├── api.py                # Django Ninja API endpoints
+│   ├── views.py              # Page views and redirection logic
+│   ├── utils.py              # Short code generation utility (Sqids)
+│   ├── validators.py         # Validators (URL, custom slug)
+│   ├── og_parser.py          # Open Graph data fetching (with SSRF protection)
+│   ├── qr_utils.py           # QR code generation utility
+│   └── tests/                # Test suite
+│       ├── conftest.py       # Centralized pytest fixtures
+│       ├── test_api.py       # API endpoint tests
+│       ├── test_models.py    # Data model tests
+│       ├── test_views.py     # View tests
+│       └── ...               # Other test files
+└── theme/                    # Django theme and templates
+    ├── templates/            # HTML templates
+    │   ├── home.html         # Homepage (short URL creation)
+    │   ├── dashboard.html    # Dashboard (user link management)
+    │   └── expired.html      # Expired link page
+    └── static_src/           # Tailwind CSS source files
 ```
 
 ## 💡 Future Roadmap
 
-  * **Switch to PostgreSQL**: Prepare a more robust database for production. (Completed)
-  * **Detailed Analytics Dashboard**: Provide more click data, such as time, source, geolocation, etc.
-  * **Custom Short URLs**: Allow users to customize the short code for their URLs.
-  * **QR Code Generation**: Generate a QR code for each short URL.
-  * **Asynchronous Tasks**: Use Celery to handle time-consuming tasks like data analysis.
+* **Switch to PostgreSQL**: Prepare a more robust database for production. ✅ Completed
+* **Detailed Analytics Dashboard**: Provide more click data, such as time, source, geolocation, etc.
+* **Custom Short URLs**: Allow users to customize the short code for their URLs. ✅ Completed
+* **QR Code Generation**: Generate a QR code for each short URL. ✅ Completed
+* **Asynchronous OG Fetching**: Make Open Graph data fetching asynchronous (Celery + Redis or Huey) to avoid blocking API requests.
+* **Caching Layer**: Use Redis to cache popular links and OG preview data.
+* **API Rate Limiting**: Implement rate limiting to prevent abuse.
 
 ## Donation
 
@@ -220,4 +252,4 @@ O'Pay (Membership required)
 
 ## License
 
-[MIT license](https://www.google.com/search?q=LICENSE)
+MIT license
