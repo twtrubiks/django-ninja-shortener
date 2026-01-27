@@ -1,89 +1,180 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
-  <h2 class="text-2xl font-bold mb-6 text-center">縮短您的網址</h2>
+<!-- Hero gradient background wrapper -->
+<div class="hero-gradient -mx-6 -mt-8 px-6 pt-8 pb-12 relative overflow-hidden">
+  <!-- Decorative background shapes -->
+  <div class="hero-shape w-72 h-72 bg-purple-200 -top-20 -left-20 absolute"></div>
+  <div class="hero-shape w-96 h-96 bg-purple-100 -bottom-32 -right-32 absolute"></div>
 
-  {% if messages %}
-    {% for message in messages %}
-      <div class="mb-4 p-3 rounded-md
-                  {% if message.tags == 'success' %} bg-green-100 text-green-800
-                  {% elif message.tags == 'error' %} bg-red-100 text-red-800
-                  {% else %} bg-blue-100 text-blue-800 {% endif %}">
-        {{ message }}
-      </div>
-    {% endfor %}
-  {% endif %}
+  <div class="max-w-2xl mx-auto relative">
+    <!-- Hero Section -->
+    <div class="text-center mb-8 animate-fade-in-up">
+      <h1 class="text-4xl sm:text-5xl font-bold text-purple-800 mb-3">縮短您的網址</h1>
+      <p class="text-gray-600 text-lg">快速、簡單、可追蹤的短網址服務</p>
+    </div>
 
-  <form action="{% url 'shorten_url' %}" method="post">
-    {% csrf_token %}
-    <div class="flex items-center border-b-2 border-blue-500 py-2">
-      <input class="appearance-none bg-transparent border-none w-full text-gray-700 mr-3 py-1 px-2 leading-tight focus:outline-none"
-             type="url"
-             name="original_url"
-             placeholder="請輸入您的長網址 (e.g., https://example.com)"
-             aria-label="長網址"
-             required>
-      <button class="flex-shrink-0 bg-blue-500 hover:bg-blue-700 border-blue-500 hover:border-blue-700 text-sm border-4 text-white py-1 px-2 rounded"
-              type="submit">
-        縮短網址
-      </button>
-    </div>
-    {% if user.is_authenticated %}
-    <div class="mt-4">
-      <label class="block text-gray-700 text-sm font-bold mb-2">自訂網址（選填）</label>
-      <div class="flex items-center">
-        <span class="text-gray-500 mr-2">{{ request.get_host }}/</span>
-        <input type="text"
-               id="custom_slug"
-               name="custom_slug"
-               pattern="[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]|[a-zA-Z0-9]"
-               minlength="3"
-               maxlength="50"
-               placeholder="my-custom-link"
-               class="flex-1 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500">
-      </div>
-      <p id="slug-status" class="text-xs text-gray-500 mt-1">
-        只能使用英文字母、數字和連字號，3-50 字元
-      </p>
-    </div>
-    <div class="mt-4">
-      <label class="block text-gray-700 text-sm font-bold mb-2">過期時間</label>
-      <select name="expires_in" class="w-full border border-gray-300 rounded px-3 py-2">
-        <option value="">永久</option>
-        <option value="3600">1 小時</option>
-        <option value="86400">1 天</option>
-        <option value="604800">7 天</option>
-        <option value="2592000">30 天</option>
-      </select>
-    </div>
+    <div class="bg-white p-8 rounded-xl shadow-xl border border-purple-100/50 animate-fade-in-up" style="animation-delay: 0.1s;">
+    {% if messages %}
+      {% for message in messages %}
+        <div class="mb-4 p-4 rounded-lg flex items-center gap-3
+                    {% if message.tags == 'success' %} bg-green-50 text-green-800 border border-green-200
+                    {% elif message.tags == 'error' %} bg-red-50 text-red-800 border border-red-200
+                    {% else %} bg-purple-50 text-purple-800 border border-purple-200 {% endif %}">
+          {% if message.tags == 'success' %}
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+          {% elif message.tags == 'error' %}
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          {% else %}
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          {% endif %}
+          <span>{{ message }}</span>
+        </div>
+      {% endfor %}
     {% endif %}
-  </form>
 
-  {% if short_url %}
-    <div class="mt-6 p-4 bg-gray-50 rounded-md">
-      <h3 class="text-lg font-semibold">您的短網址：</h3>
-      <div class="flex justify-between items-center mt-2">
-        <a href="{{ short_url }}" target="_blank" class="text-blue-600 hover:underline">{{ short_url }}</a>
-        <button onclick="copyToClipboard('{{ short_url }}')" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm py-1 px-3 rounded">
-          複製
-        </button>
+    <form action="{% url 'shorten_url' %}" method="post" id="shorten-form">
+      {% csrf_token %}
+      <div class="space-y-4">
+        <div>
+          <label for="original_url" class="block text-gray-700 font-medium mb-2">長網址</label>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <input class="flex-1 bg-gray-50 border-2 border-gray-200 rounded-lg px-4 py-3 text-gray-700 placeholder-gray-400 focus:border-purple-500 focus:bg-white focus:outline-none transition-colors focus-ring"
+                   type="url"
+                   id="original_url"
+                   name="original_url"
+                   placeholder="請輸入您的長網址 (e.g., https://example.com)"
+                   required>
+            <button class="btn-cta-gradient text-white font-semibold py-3.5 px-8 rounded-xl cursor-pointer focus-ring disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[160px]"
+                    type="submit"
+                    id="submit-btn">
+              <span id="btn-text">縮短網址</span>
+              <svg id="btn-loading" class="hidden animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {% if user.is_authenticated %}
+        <div class="border-t border-gray-100 pt-4 mt-4">
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label for="custom_slug" class="block text-gray-700 font-medium mb-2">自訂網址（選填）</label>
+              <div class="flex items-center bg-gray-50 border-2 border-gray-200 rounded-lg overflow-hidden focus-within:border-purple-500 focus-within:bg-white transition-colors">
+                <span class="text-gray-500 pl-3 pr-1 text-sm">{{ request.get_host }}/</span>
+                <input type="text"
+                       id="custom_slug"
+                       name="custom_slug"
+                       pattern="[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]|[a-zA-Z0-9]"
+                       minlength="3"
+                       maxlength="50"
+                       placeholder="my-custom-link"
+                       aria-describedby="slug-status"
+                       aria-invalid="false"
+                       class="flex-1 bg-transparent border-none py-3 pr-3 text-gray-700 focus:outline-none">
+              </div>
+              <p id="slug-status" role="status" aria-live="polite" class="text-xs text-gray-600 mt-1">
+                只能使用英文字母、數字和連字號，3-50 字元
+              </p>
+            </div>
+
+            <div>
+              <label for="expires_in" class="block text-gray-700 font-medium mb-2">過期時間</label>
+              <select name="expires_in" id="expires_in" class="w-full bg-gray-50 border-2 border-gray-200 rounded-lg px-4 py-3 text-gray-700 focus:border-purple-500 focus:bg-white focus:outline-none transition-colors cursor-pointer focus-ring">
+                <option value="">永久</option>
+                <option value="3600">1 小時</option>
+                <option value="86400">1 天</option>
+                <option value="604800">7 天</option>
+                <option value="2592000">30 天</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        {% endif %}
       </div>
+    </form>
+
+    {% if short_url %}
+      <div class="mt-6 p-5 bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl border border-purple-200">
+        <div class="flex items-center gap-2 mb-3">
+          <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          <h3 class="text-lg font-semibold text-purple-800">您的短網址已建立</h3>
+        </div>
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-lg">
+          <a href="{{ short_url }}" target="_blank" class="text-purple-700 hover:text-purple-900 font-medium break-all focus-ring rounded">
+            {{ short_url }}
+          </a>
+          <button onclick="copyToClipboard('{{ short_url }}')"
+                  class="btn-cta-gradient text-white py-2.5 px-5 rounded-lg cursor-pointer focus-ring flex items-center gap-2 flex-shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+            </svg>
+            複製
+          </button>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+  </div>
+</div>
+
+<!-- Features Section -->
+<div class="max-w-2xl mx-auto mt-12">
+  <div class="grid sm:grid-cols-3 gap-6">
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 text-center animate-fade-in-up-delay-1">
+      <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+      </div>
+      <h3 class="font-semibold text-gray-800 mb-2">快速生成</h3>
+      <p class="text-gray-600 text-sm">即時將長網址轉換為簡短易記的連結</p>
     </div>
-  {% endif %}
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 text-center animate-fade-in-up-delay-2">
+      <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+        </svg>
+      </div>
+      <h3 class="font-semibold text-gray-800 mb-2">點擊追蹤</h3>
+      <p class="text-gray-600 text-sm">追蹤每個短網址的點擊次數</p>
+    </div>
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 text-center animate-fade-in-up-delay-3">
+      <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
+        </svg>
+      </div>
+      <h3 class="font-semibold text-gray-800 mb-2">QR Code</h3>
+      <p class="text-gray-600 text-sm">為每個短網址生成專屬 QR Code</p>
+    </div>
+  </div>
 </div>
 
 <script>
-function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).then(function() {
-    alert('已複製到剪貼簿！');
-  }, function(err) {
-    alert('複製失敗: ', err);
-  });
-}
+// Form submit loading state
+document.getElementById('shorten-form').addEventListener('submit', function() {
+  const btn = document.getElementById('submit-btn');
+  const btnText = document.getElementById('btn-text');
+  const btnLoading = document.getElementById('btn-loading');
+
+  btn.disabled = true;
+  btnText.textContent = '處理中...';
+  btnLoading.classList.remove('hidden');
+});
 
 {% if user.is_authenticated %}
-// 即時檢查 slug 可用性
+// Slug availability check
 (function() {
   const slugInput = document.getElementById('custom_slug');
   const statusEl = document.getElementById('slug-status');
@@ -97,40 +188,40 @@ function copyToClipboard(text) {
 
     if (!slug) {
       statusEl.textContent = '只能使用英文字母、數字和連字號，3-50 字元';
-      statusEl.className = 'text-xs text-gray-500 mt-1';
+      statusEl.className = 'text-xs text-gray-600 mt-1';
       return;
     }
 
     if (slug.length < 3) {
       statusEl.textContent = '自訂網址必須至少 3 個字元';
-      statusEl.className = 'text-xs text-red-500 mt-1';
+      statusEl.className = 'text-xs text-red-600 mt-1';
+      slugInput.setAttribute('aria-invalid', 'true');
       return;
     }
 
-    // 使用 debounce 避免過多請求
     debounceTimer = setTimeout(function() {
       statusEl.textContent = '檢查中...';
-      statusEl.className = 'text-xs text-gray-500 mt-1';
+      statusEl.className = 'text-xs text-gray-600 mt-1';
 
-      // 取得 JWT token（從 cookie 或其他來源）
-      // 對於 Web 表單，我們直接送出表單讓後端驗證
-      // 這裡只做前端格式驗證
       const pattern = /^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$/;
       if (!pattern.test(slug)) {
         statusEl.textContent = '格式錯誤：只能使用英文字母、數字和連字號，且不能以連字號開頭或結尾';
-        statusEl.className = 'text-xs text-red-500 mt-1';
+        statusEl.className = 'text-xs text-red-600 mt-1';
+        slugInput.setAttribute('aria-invalid', 'true');
         return;
       }
 
       if (slug.includes('--')) {
         statusEl.textContent = '格式錯誤：不能包含連續的連字號';
-        statusEl.className = 'text-xs text-red-500 mt-1';
+        statusEl.className = 'text-xs text-red-600 mt-1';
+        slugInput.setAttribute('aria-invalid', 'true');
         return;
       }
 
+      slugInput.setAttribute('aria-invalid', 'false');
       statusEl.textContent = '格式正確！送出後將檢查是否可用';
-      statusEl.className = 'text-xs text-green-500 mt-1';
-    }, 300);
+      statusEl.className = 'text-xs text-green-600 mt-1';
+    }, 200);
   });
 })();
 {% endif %}

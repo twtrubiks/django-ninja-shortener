@@ -1,45 +1,144 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="max-w-md mx-auto bg-white p-8 rounded-lg shadow-md">
-  <h2 class="text-2xl font-bold mb-6 text-center">建立您的帳號</h2>
-  <form method="post">
-    {% csrf_token %}
+<div class="max-w-md mx-auto animate-fade-in-up">
+  <div class="text-center mb-6">
+    <h1 class="text-3xl font-bold text-purple-800">建立帳號</h1>
+    <p class="text-gray-600 mt-2">加入我們，開始使用短網址服務</p>
+  </div>
 
-    {% if form.non_field_errors %}
-      <div class="mb-4 p-3 rounded-md bg-red-100 text-red-800">
-        {% for error in form.non_field_errors %}
-          <p>{{ error }}</p>
-        {% endfor %}
-      </div>
-    {% endif %}
+  <div class="bg-white p-8 rounded-xl shadow-lg border border-purple-100">
+    <form method="post" data-loading-form>
+      {% csrf_token %}
 
-    {% for field in form %}
-      <div class="mb-4">
-        <label for="{{ field.id_for_label }}" class="block text-gray-700 text-sm font-bold mb-2">{{ field.label }}</label>
-        <input type="{{ field.field.widget.input_type }}"
-               name="{{ field.name }}"
-               id="{{ field.id_for_label }}"
-               {% if field.field.widget.input_type != 'password' %}value="{{ field.value|default:'' }}"{% endif %}
-               class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline {% if field.errors %}border-red-500{% endif %}"
-               >
-        {% if field.help_text and field.name == 'username' %}
-          <p class="text-gray-600 text-xs italic mt-1">{{ field.help_text|safe }}</p>
+      {% if form.non_field_errors %}
+        <div role="alert" class="mb-4 p-4 rounded-lg bg-red-50 text-red-800 border border-red-200 flex items-center gap-3">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <div>
+            {% for error in form.non_field_errors %}
+              <p>{{ error }}</p>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- 使用者名稱 -->
+      <div class="mb-5">
+        <label for="id_username" class="block text-gray-700 font-medium mb-2">使用者名稱</label>
+        <input type="text"
+               name="username"
+               id="id_username"
+               value="{{ form.username.value|default:'' }}"
+               autocomplete="username"
+               aria-describedby="username-help{% if form.username.errors %} username-error{% endif %}"
+               {% if form.username.errors %}aria-invalid="true"{% endif %}
+               class="w-full bg-gray-50 border-2 rounded-lg px-4 py-3 text-gray-700 focus:bg-white focus:outline-none transition-colors focus-ring {% if form.username.errors %}border-red-400 focus:border-red-500{% else %}border-gray-200 focus:border-purple-500{% endif %}"
+               required>
+        <p id="username-help" class="text-gray-500 text-xs mt-2">最多 150 字元。只能使用字母、數字和 @/./+/-/_ 符號。</p>
+        {% if form.username.errors %}
+          <p id="username-error" role="alert" class="text-red-600 text-xs mt-2 flex items-center gap-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            {{ form.username.errors.0 }}
+          </p>
         {% endif %}
-        {% for error in field.errors %}
-          <p class="text-red-500 text-xs italic mt-1">{{ error }}</p>
-        {% endfor %}
       </div>
-    {% endfor %}
 
-    <div class="flex items-center justify-between">
-      <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="submit">
-        註冊
+      <!-- 密碼 -->
+      <div class="mb-5">
+        <label for="id_password1" class="block text-gray-700 font-medium mb-2">密碼</label>
+        <div class="relative">
+          <input type="password"
+                 name="password1"
+                 id="id_password1"
+                 autocomplete="new-password"
+                 aria-describedby="password1-toggle-hint{% if form.password1.errors %} password1-error{% endif %}"
+                 {% if form.password1.errors %}aria-invalid="true"{% endif %}
+                 class="w-full bg-gray-50 border-2 rounded-lg px-4 py-3 pr-12 text-gray-700 focus:bg-white focus:outline-none transition-colors focus-ring {% if form.password1.errors %}border-red-400 focus:border-red-500{% else %}border-gray-200 focus:border-purple-500{% endif %}"
+                 required>
+          <button type="button"
+                  onclick="togglePassword('id_password1', this)"
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus-ring rounded p-1"
+                  aria-label="顯示密碼"
+                  aria-pressed="false">
+            <svg class="w-5 h-5 eye-open" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+            </svg>
+            <svg class="w-5 h-5 eye-closed hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+            </svg>
+          </button>
+        </div>
+        <span id="password1-toggle-hint" class="sr-only">點擊眼睛圖示可顯示或隱藏密碼</span>
+        {% if form.password1.errors %}
+          <p id="password1-error" role="alert" class="text-red-600 text-xs mt-2 flex items-center gap-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            {{ form.password1.errors.0 }}
+          </p>
+        {% endif %}
+      </div>
+
+      <!-- 確認密碼 -->
+      <div class="mb-5">
+        <label for="id_password2" class="block text-gray-700 font-medium mb-2">確認密碼</label>
+        <div class="relative">
+          <input type="password"
+                 name="password2"
+                 id="id_password2"
+                 autocomplete="new-password"
+                 aria-describedby="password2-toggle-hint{% if form.password2.errors %} password2-error{% endif %}"
+                 {% if form.password2.errors %}aria-invalid="true"{% endif %}
+                 class="w-full bg-gray-50 border-2 rounded-lg px-4 py-3 pr-12 text-gray-700 focus:bg-white focus:outline-none transition-colors focus-ring {% if form.password2.errors %}border-red-400 focus:border-red-500{% else %}border-gray-200 focus:border-purple-500{% endif %}"
+                 required>
+          <button type="button"
+                  onclick="togglePassword('id_password2', this)"
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus-ring rounded p-1"
+                  aria-label="顯示密碼"
+                  aria-pressed="false">
+            <svg class="w-5 h-5 eye-open" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+            </svg>
+            <svg class="w-5 h-5 eye-closed hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+            </svg>
+          </button>
+        </div>
+        <span id="password2-toggle-hint" class="sr-only">點擊眼睛圖示可顯示或隱藏密碼</span>
+        {% if form.password2.errors %}
+          <p id="password2-error" role="alert" class="text-red-600 text-xs mt-2 flex items-center gap-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            {{ form.password2.errors.0 }}
+          </p>
+        {% endif %}
+      </div>
+
+      <button type="submit"
+              data-loading-btn
+              class="w-full btn-cta-gradient text-white font-semibold py-3 px-4 rounded-lg cursor-pointer focus-ring flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
+        <svg class="w-5 h-5 animate-spin hidden" data-loading-spinner fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span data-loading-text="註冊中...">註冊</span>
       </button>
-      <a class="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800" href="{% url 'login' %}">
-        已經有帳號了？登入
-      </a>
-    </div>
-  </form>
+
+      <p class="mt-6 text-center text-gray-600">
+        已經有帳號了？
+        <a href="{% url 'login' %}" class="text-purple-600 hover:text-purple-800 font-medium focus-ring rounded">
+          立即登入
+        </a>
+      </p>
+    </form>
+  </div>
 </div>
+
 {% endblock %}

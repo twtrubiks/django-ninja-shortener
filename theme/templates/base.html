@@ -1,38 +1,275 @@
 {% load static tailwind_tags %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hant">
 	<head>
     <title>Django Ninja Shorty</title>
     <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<meta http-equiv="X-UA-Compatible" content="ie=edge">
+		<!-- Google Fonts: Plus Jakarta Sans -->
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 		{% tailwind_css %}
 	</head>
 
-	<body class="bg-gray-100 text-gray-800 font-sans">
-		<nav class="bg-white shadow-md">
+	<body class="bg-purple-50 text-gray-800">
+		<!-- Skip to main content link for accessibility -->
+		<a href="#main-content"
+		   class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4
+		          bg-purple-700 text-white px-4 py-2 rounded-lg z-50 focus-ring">
+			跳至主要內容
+		</a>
+
+		<!-- Floating Navbar -->
+		<nav class="fixed top-4 left-4 right-4 navbar-floating shadow-lg rounded-2xl z-40 border border-gray-100/50">
 			<div class="container mx-auto px-6 py-3 flex justify-between items-center">
-				<a class="text-xl font-bold text-gray-800" href="/">Shorty</a>
-				<div>
+				<a class="flex items-center gap-2 text-xl font-bold text-purple-700 hover:text-purple-800 transition-colors" href="/">
+					<!-- Logo Icon -->
+					<svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+						<path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+						<path d="M10.172 13.828a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.102 1.101" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+					</svg>
+					Shorty
+				</a>
+
+				<!-- Mobile menu button -->
+				<button id="mobile-menu-btn"
+						class="sm:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors focus-ring btn-press"
+						aria-label="選單"
+						aria-expanded="false"
+						aria-controls="mobile-menu">
+					<svg id="menu-icon" class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+					</svg>
+					<svg id="close-icon" class="w-6 h-6 text-gray-700 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+					</svg>
+				</button>
+
+				<!-- Desktop menu -->
+				<div class="hidden sm:flex items-center gap-4">
 					{% if user.is_authenticated %}
-						<a href="{% url 'dashboard' %}" class="text-gray-800 text-sm mx-3">儀表板</a>
+						<a href="{% url 'dashboard' %}"
+						   class="text-gray-700 hover:text-purple-700 font-medium transition-colors focus-ring rounded px-2 py-1">
+							儀表板
+						</a>
 						<span class="text-gray-600 text-sm">您好, {{ user.username }}!</span>
 						<form action="{% url 'logout' %}" method="post" class="inline">
 							{% csrf_token %}
-							<button type="submit" class="text-sm text-blue-500 hover:underline ml-3">登出</button>
+							<button type="submit"
+									class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors cursor-pointer focus-ring btn-press">
+								登出
+							</button>
 						</form>
 					{% else %}
-						<a href="{% url 'login' %}" class="text-gray-800 text-sm mx-3">登入</a>
-						<a href="{% url 'register' %}" class="text-gray-800 text-sm">註冊</a>
+						<a href="{% url 'login' %}"
+						   class="text-gray-700 hover:text-purple-700 font-medium transition-colors focus-ring rounded px-2 py-1">
+							登入
+						</a>
+						<a href="{% url 'register' %}"
+						   class="btn-cta-gradient text-white font-medium py-2 px-4 rounded-lg cursor-pointer focus-ring">
+							註冊
+						</a>
 					{% endif %}
 				</div>
 			</div>
+
+			<!-- Mobile menu dropdown -->
+			<div id="mobile-menu"
+				 class="sm:hidden hidden absolute top-full left-0 right-0 mt-2 mx-2 bg-white rounded-xl shadow-lg border border-gray-100 p-4 origin-top transition-all duration-200 animate-fade-in-up">
+				{% if user.is_authenticated %}
+					<div class="pb-3 mb-3 border-b border-gray-100">
+						<span class="text-gray-600 text-sm">您好, {{ user.username }}!</span>
+					</div>
+					<div class="space-y-2">
+						<a href="{% url 'dashboard' %}"
+						   class="block text-gray-700 hover:text-purple-700 hover:bg-purple-50 font-medium transition-colors focus-ring rounded-lg px-3 py-2">
+							儀表板
+						</a>
+						<form action="{% url 'logout' %}" method="post">
+							{% csrf_token %}
+							<button type="submit"
+									class="w-full text-left bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-3 rounded-lg transition-colors cursor-pointer focus-ring btn-press">
+								登出
+							</button>
+						</form>
+					</div>
+				{% else %}
+					<div class="space-y-2">
+						<a href="{% url 'login' %}"
+						   class="block text-gray-700 hover:text-purple-700 hover:bg-purple-50 font-medium transition-colors focus-ring rounded-lg px-3 py-2">
+							登入
+						</a>
+						<a href="{% url 'register' %}"
+						   class="block btn-cta-gradient text-white text-center font-medium py-2 px-3 rounded-lg cursor-pointer focus-ring">
+							註冊
+						</a>
+					</div>
+				{% endif %}
+			</div>
 		</nav>
 
-		<main class="container mx-auto px-6 py-8">
+		<!-- Spacer for fixed navbar -->
+		<div class="h-20"></div>
+
+		<main id="main-content" class="container mx-auto px-6 py-8" tabindex="-1">
 			{% block content %}
 			{% endblock %}
 		</main>
+
+		<!-- Toast Container -->
+		<div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none"></div>
+
+		<!-- Screen reader announcer for dynamic content -->
+		<div id="live-announcer"
+		     aria-live="polite"
+		     aria-atomic="true"
+		     class="sr-only">
+		</div>
+
+		<!-- Global Toast Function -->
+		<script>
+		// Announce message to screen readers
+		function announceToScreen(message) {
+			const announcer = document.getElementById('live-announcer');
+			announcer.textContent = '';
+			setTimeout(() => { announcer.textContent = message; }, 100);
+		}
+
+		function showToast(message, type = 'success') {
+			const container = document.getElementById('toast-container');
+			const toast = document.createElement('div');
+
+			const bgColor = {
+				'success': 'bg-green-600',
+				'error': 'bg-red-600',
+				'info': 'bg-purple-600',
+				'warning': 'bg-orange-500'
+			}[type] || 'bg-purple-600';
+
+			const icon = {
+				'success': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>',
+				'error': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>',
+				'info': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
+				'warning': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>'
+			}[type] || '';
+
+			toast.className = `flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-white pointer-events-auto ${bgColor} toast-enter`;
+			toast.innerHTML = `${icon}<span></span>`;
+			toast.querySelector('span').textContent = message;
+			container.appendChild(toast);
+
+			// Announce to screen readers
+			announceToScreen(message);
+
+			setTimeout(() => {
+				toast.classList.remove('toast-enter');
+				toast.classList.add('toast-exit');
+				setTimeout(() => toast.remove(), 300);
+			}, 3000);
+		}
+
+		// Mobile menu toggle
+		(function() {
+			const menuBtn = document.getElementById('mobile-menu-btn');
+			const mobileMenu = document.getElementById('mobile-menu');
+			const menuIcon = document.getElementById('menu-icon');
+			const closeIcon = document.getElementById('close-icon');
+
+			if (!menuBtn || !mobileMenu || !menuIcon || !closeIcon) return;
+
+			menuBtn.addEventListener('click', function() {
+				const isExpanded = menuBtn.getAttribute('aria-expanded') === 'true';
+
+				menuBtn.setAttribute('aria-expanded', !isExpanded);
+				mobileMenu.classList.toggle('hidden');
+				menuIcon.classList.toggle('hidden');
+				closeIcon.classList.toggle('hidden');
+			});
+
+			// Close menu when clicking outside
+			document.addEventListener('click', function(e) {
+				if (!menuBtn.contains(e.target) && !mobileMenu.contains(e.target)) {
+					menuBtn.setAttribute('aria-expanded', 'false');
+					mobileMenu.classList.add('hidden');
+					menuIcon.classList.remove('hidden');
+					closeIcon.classList.add('hidden');
+				}
+			});
+
+			// Close menu on ESC
+			document.addEventListener('keydown', function(e) {
+				if (e.key === 'Escape' && !mobileMenu.classList.contains('hidden')) {
+					menuBtn.setAttribute('aria-expanded', 'false');
+					mobileMenu.classList.add('hidden');
+					menuIcon.classList.remove('hidden');
+					closeIcon.classList.add('hidden');
+					menuBtn.focus();
+				}
+			});
+		})();
+
+		// Global: Password visibility toggle
+		function togglePassword(inputId, btn) {
+			const input = document.getElementById(inputId);
+			if (!input) return;
+
+			const eyeOpen = btn.querySelector('.eye-open');
+			const eyeClosed = btn.querySelector('.eye-closed');
+			if (!eyeOpen || !eyeClosed) return;
+
+			const isPassword = input.type === 'password';
+			input.type = isPassword ? 'text' : 'password';
+
+			eyeOpen.classList.toggle('hidden', !isPassword);
+			eyeClosed.classList.toggle('hidden', isPassword);
+
+			btn.setAttribute('aria-label', isPassword ? '隱藏密碼' : '顯示密碼');
+			btn.setAttribute('aria-pressed', isPassword ? 'true' : 'false');
+		}
+
+		// Global: Copy to clipboard
+		function copyToClipboard(text) {
+			if (!text) return;
+
+			navigator.clipboard.writeText(text).then(function() {
+				showToast('已複製到剪貼簿！', 'success');
+			}, function() {
+				showToast('複製失敗，請手動複製', 'error');
+			});
+		}
+
+		// Global: Auto-bind form loading state via data attributes
+		document.addEventListener('DOMContentLoaded', function() {
+			// Reset all loading states (handles validation failure page re-render)
+			document.querySelectorAll('[data-loading-btn]').forEach(function(btn) {
+				btn.disabled = false;
+				btn.removeAttribute('aria-busy');
+			});
+			document.querySelectorAll('[data-loading-spinner]').forEach(function(spinner) {
+				spinner.classList.add('hidden');
+			});
+
+			document.querySelectorAll('[data-loading-form]').forEach(function(form) {
+				form.addEventListener('submit', function() {
+					const btn = form.querySelector('[data-loading-btn]');
+					const spinner = form.querySelector('[data-loading-spinner]');
+					const text = form.querySelector('[data-loading-text]');
+
+					if (btn) {
+						btn.disabled = true;
+						btn.setAttribute('aria-busy', 'true');
+					}
+					if (spinner) spinner.classList.remove('hidden');
+					if (text) {
+						const loadingText = text.getAttribute('data-loading-text');
+						if (loadingText) text.textContent = loadingText;
+					}
+				});
+			});
+		});
+		</script>
 	</body>
 </html>
