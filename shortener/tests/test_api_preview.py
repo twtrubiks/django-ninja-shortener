@@ -20,7 +20,7 @@ from shortener.og_parser import OGData, OGParserError
 class TestShortenWithPreview:
     """POST /shorten 端點測試"""
 
-    @patch('shortener.api.fetch_og_data')
+    @patch('shortener.services.fetch_og_data')
     def test_creates_link_with_preview_success(self, mock_fetch, ninja_authenticated_client):
         """成功建立短網址並抓取預覽"""
         mock_fetch.return_value = OGData(
@@ -48,7 +48,7 @@ class TestShortenWithPreview:
         assert data['preview']['og_title'] == 'Test Title'
         assert data['preview']['fetch_status'] == 'success'
 
-    @patch('shortener.api.fetch_og_data')
+    @patch('shortener.services.fetch_og_data')
     def test_creates_link_even_if_preview_fails(self, mock_fetch, ninja_authenticated_client):
         """即使預覽抓取失敗，仍應建立短網址"""
         mock_fetch.side_effect = OGParserError('Connection refused')
@@ -73,7 +73,7 @@ class TestShortenWithPreview:
 class TestRefreshPreview:
     """POST /links/{short_code}/refresh-preview 端點測試"""
 
-    @patch('shortener.api.fetch_og_data')
+    @patch('shortener.services.fetch_og_data')
     def test_owner_can_refresh_preview(self, mock_fetch, ninja_authenticated_client, test_user):
         """擁有者可以刷新預覽"""
         # 建立測試連結

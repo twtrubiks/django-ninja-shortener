@@ -6,7 +6,6 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
@@ -14,8 +13,12 @@ from django.utils import timezone
 from django.views import generic
 
 from .models import Link, LinkPreview
-from .og_parser import OGParserError, fetch_og_data
-from .utils import generate_short_code_from_id
+from .services import (
+    ShortCodeGenerationError,
+    SlugAlreadyExistsError,
+    create_short_link,
+    fetch_and_save_preview,
+)
 from .validators import validate_custom_slug, validate_url_scheme
 
 # 允許的過期時間選項（秒）- 白名單驗證
@@ -113,37 +116,20 @@ def shorten_url_view(request):
                         messages.error(request, str(e))
                         return redirect('home')
 
-            # 使用 transaction 確保原子性
-            with transaction.atomic():
-                if custom_slug:
-                    # 直接依賴資料庫唯一約束，避免 TOCTOU 競態條件
-                    try:
-                        link = Link.objects.create(
-                            original_url=original_url,
-                            short_code=custom_slug,
-                            is_custom_slug=True,
-                            owner=owner,
-                            expires_at=expires_at,
-                        )
-                    except IntegrityError:
-                        messages.error(request, f'網址「{custom_slug}」已被使用，請選擇其他名稱')
-                        return redirect('home')
-                else:
-                    # 使用 Sqids 自動生成
-                    try:
-                        link = Link.objects.create(
-                            original_url=original_url,
-                            is_custom_slug=False,
-                            owner=owner,
-                            expires_at=expires_at,
-                        )
-                        # 使用資料庫 ID 生成短碼（零碰撞）
-                        link.short_code = generate_short_code_from_id(link.id)
-                        link.save(update_fields=['short_code'])
-                    except IntegrityError:
-                        # Sqids 生成的短碼理論上不會重複，如果發生表示系統異常
-                        messages.error(request, '系統發生錯誤，請稍後再試')
-                        return redirect('home')
+            # 建立短網址（共用核心邏輯；Web 表單不在建立時同步抓取 OG）
+            try:
+                link = create_short_link(
+                    original_url=original_url,
+                    owner=owner,
+                    custom_slug=custom_slug,
+                    expires_at=expires_at,
+                )
+            except SlugAlreadyExistsError as e:
+                messages.error(request, f'網址「{e.slug}」已被使用，請選擇其他名稱')
+                return redirect('home')
+            except ShortCodeGenerationError:
+                messages.error(request, '系統發生錯誤，請稍後再試')
+                return redirect('home')
 
             full_short_url = request.build_absolute_uri(f'/{link.short_code}')
             messages.success(request, "成功建立短網址！")
@@ -169,26 +155,14 @@ def refresh_preview_view(request, short_code):
         messages.error(request, '您沒有權限操作此連結')
         return redirect('dashboard')
 
-    # 抓取 OG 資料
-    preview, _ = LinkPreview.objects.get_or_create(link=link)
+    # 抓取 OG 資料（共用核心邏輯）
+    preview = fetch_and_save_preview(link)
 
-    try:
-        og_data = fetch_og_data(link.original_url)
-        preview.og_title = og_data.title
-        preview.og_description = og_data.description
-        preview.og_image = og_data.image
-        preview.og_site_name = og_data.site_name
-        preview.og_type = og_data.og_type
-        preview.fetch_status = LinkPreview.FetchStatus.SUCCESS
-        preview.fetch_error = ''
-        preview.fetched_at = timezone.now()
+    if preview.fetch_status == LinkPreview.FetchStatus.SUCCESS:
         messages.success(request, '預覽資料已更新')
-    except OGParserError as e:
-        preview.fetch_status = LinkPreview.FetchStatus.FAILED
-        preview.fetch_error = str(e)
-        messages.warning(request, f'抓取失敗：{e}')
+    else:
+        messages.warning(request, f'抓取失敗：{preview.fetch_error}')
 
-    preview.save()
     return redirect('dashboard')
 
 

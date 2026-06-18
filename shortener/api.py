@@ -1,21 +1,22 @@
 import re
-import uuid
 from datetime import datetime
 from typing import Optional
 
 from django.conf import settings
-from django.db import IntegrityError, transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from ninja import ModelSchema, Query, Router, Schema
 from ninja_jwt.authentication import JWTAuth
 from pydantic import HttpUrl, field_validator
 
 from .models import Link, LinkPreview
-from .og_parser import OGParserError, fetch_og_data
 from .qr_utils import generate_qr_code
-from .utils import generate_short_code_from_id
+from .services import (
+    ShortCodeGenerationError,
+    SlugAlreadyExistsError,
+    create_short_link,
+    fetch_and_save_preview,
+)
 from .validators import validate_custom_slug
 
 router = Router(tags=['shorteners'])
@@ -125,38 +126,6 @@ class SlugAvailabilityResponse(Schema):
 # ========== Helper Functions ==========
 
 
-def _fetch_and_save_preview(link: Link) -> LinkPreview:
-    """
-    抓取 OG 資料並儲存到 LinkPreview
-
-    Args:
-        link: Link 實例
-
-    Returns:
-        LinkPreview: 建立或更新後的預覽實例
-    """
-    preview, _ = LinkPreview.objects.get_or_create(link=link)
-
-    try:
-        og_data = fetch_og_data(link.original_url)
-
-        preview.og_title = og_data.title
-        preview.og_description = og_data.description
-        preview.og_image = og_data.image
-        preview.og_site_name = og_data.site_name
-        preview.og_type = og_data.og_type
-        preview.fetch_status = LinkPreview.FetchStatus.SUCCESS
-        preview.fetch_error = ''
-        preview.fetched_at = timezone.now()
-
-    except OGParserError as e:
-        preview.fetch_status = LinkPreview.FetchStatus.FAILED
-        preview.fetch_error = str(e)
-
-    preview.save()
-    return preview
-
-
 def _link_to_response(link: Link) -> dict:
     """將 Link 轉換為 API 回應格式"""
     preview_data = None
@@ -219,37 +188,17 @@ def shorten_url(request, payload: ShortenRequest):
             'max_links': max_links,
         }
 
-    custom_slug = payload.custom_slug
-
-    with transaction.atomic():
-        if custom_slug:
-            # 直接依賴資料庫唯一約束，避免 TOCTOU 競態條件
-            try:
-                link = Link.objects.create(
-                    original_url=str(payload.original_url),
-                    short_code=custom_slug,
-                    is_custom_slug=True,
-                    owner=owner,
-                    expires_at=payload.expires_at,
-                )
-            except IntegrityError:
-                return 409, {'detail': f'網址「{custom_slug}」已被使用，請選擇其他名稱'}
-        else:
-            # 使用 Sqids 自動生成（現有邏輯）
-            try:
-                link = Link.objects.create(
-                    original_url=str(payload.original_url),
-                    short_code=str(uuid.uuid4())[:15],  # 暫時值
-                    is_custom_slug=False,
-                    owner=owner,
-                    expires_at=payload.expires_at,
-                )
-                # 使用資料庫 ID 生成短碼（零碰撞）
-                link.short_code = generate_short_code_from_id(link.id)
-                link.save(update_fields=['short_code'])
-            except IntegrityError:
-                # Sqids 生成的短碼理論上不會重複，如果發生表示系統異常
-                return 500, {'detail': '系統發生錯誤，請稍後再試'}
+    try:
+        link = create_short_link(
+            original_url=str(payload.original_url),
+            owner=owner,
+            custom_slug=payload.custom_slug,
+            expires_at=payload.expires_at,
+        )
+    except SlugAlreadyExistsError as e:
+        return 409, {'detail': f'網址「{e.slug}」已被使用，請選擇其他名稱'}
+    except ShortCodeGenerationError:
+        return 500, {'detail': '系統發生錯誤，請稍後再試'}
 
     # TODO: 異步化優化點
     # 目前 OG 資料同步抓取，若目標網站響應慢（>10秒）會阻塞 API 響應
@@ -258,7 +207,7 @@ def shorten_url(request, payload: ShortenRequest):
     # 2. Huey：輕量替代方案
     # 3. Django Q：與 Django 整合更緊密
     # 4. 立即返回 + 前端輪詢：先返回 pending 狀態，前端輪詢 preview 結果
-    _fetch_and_save_preview(link)
+    fetch_and_save_preview(link)
 
     # 重新載入 link 以取得 preview 關聯
     link.refresh_from_db()
@@ -286,7 +235,7 @@ def refresh_link_preview(request, short_code: str):
         return JsonResponse({'detail': '您沒有權限操作此連結'}, status=403)
 
     # 重新抓取 OG 資料
-    _fetch_and_save_preview(link)
+    fetch_and_save_preview(link)
     link.refresh_from_db()
 
     return _link_to_response(link)
