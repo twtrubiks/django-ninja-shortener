@@ -38,6 +38,7 @@ urlpatterns = [
 
     # Link Actions
     path('links/<str:short_code>/refresh/', shortener_views.refresh_preview_view, name='refresh_preview'),
+    path('links/<str:short_code>/preview-status/', shortener_views.preview_status_view, name='preview_status'),
     path('links/<str:short_code>/delete/', shortener_views.delete_link_view, name='delete_link'),
 
     # Redirect (must be last due to catch-all pattern)

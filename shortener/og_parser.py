@@ -270,9 +270,13 @@ def fetch_og_data(
             og_type=_safe_get_from_metadata(metadata, 'og:type') or '',
         )
 
-        # 截斷過長的內容
+        # 截斷過長的內容（長度對齊 LinkPreview 各欄位的 max_length，
+        # 避免超長值在 preview.save() 觸發 DataError 而讓狀態卡在 pending）
         og_data.title = og_data.title[:500] if og_data.title else ''
         og_data.description = og_data.description[:2000] if og_data.description else ''
+        og_data.image = og_data.image[:2000] if og_data.image else ''
+        og_data.site_name = og_data.site_name[:200] if og_data.site_name else ''
+        og_data.og_type = og_data.og_type[:100] if og_data.og_type else ''
 
         logger.info(f'Successfully fetched OG data for {url}')
         return og_data

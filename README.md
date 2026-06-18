@@ -28,7 +28,7 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 * **短網址過期機制**：可設定短網址過期時間（1 小時、1 天、7 天、30 天或永久）。
 * **短網址重定向**：點擊短網址會將使用者重新導向至原始的長網址，使用原子性更新防止競態條件。
 * **點擊次數追蹤**：系統會自動計算每個短網址被點擊的次數。
-* **Open Graph 預覽**：自動抓取目標網頁的 OG 資料（標題、描述、圖片），並支援手動刷新。
+* **Open Graph 預覽**：以 Django-Q 背景**非同步**抓取目標網頁的 OG 資料（標題、描述、圖片），建立短網址不被目標網站拖慢；儀表板顯示骨架載入並自動輪詢更新，亦支援手動重新抓取。
 * **QR Code 生成**：為每個短網址生成 QR Code，支援多種尺寸（128/256/512px）和自訂顏色。
 * **個人儀表板**：分頁顯示用戶的所有短網址及其統計資料，支援連結刪除功能。
 * **連結數量限制**：每位登入用戶最多可建立 1000 個連結。
@@ -47,7 +47,8 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 * **短網址代碼**：使用 [Sqids](https://sqids.org/) 從資料庫 ID 生成（零碰撞設計）
 * **QR Code**：使用 [Segno](https://segno.readthedocs.io/) 生成 QR Code
 * **OG 解析**：使用 [metadata_parser](https://github.com/jvanasco/metadata_parser) 解析 Open Graph 資料
-* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)（109 個測試案例，93% 覆蓋率）
+* **非同步任務**：使用 [Django-Q2](https://django-q2.readthedocs.io/) 背景處理 OG 抓取（以 PostgreSQL ORM 作為 broker，免額外的 Redis）
+* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)（118 個測試案例，94% 覆蓋率）
 * **容器化**：[Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 快速啟動 (使用 Docker, 建議用這個)
@@ -64,7 +65,7 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
     docker compose up --build
     ```
 
-    這個指令會建立 Docker 映像檔、安裝依賴、執行資料庫遷移，並啟動開發伺服器。
+    這個指令會建立 Docker 映像檔、安裝依賴、執行資料庫遷移，並啟動所有服務：Django 開發伺服器、PostgreSQL、Tailwind 編譯，以及 `qcluster`（Django-Q 背景 worker，負責非同步抓取 OG 預覽）。
 
 2. **建立超級使用者 (可選)：**
 
@@ -140,6 +141,14 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
     python manage.py tailwind start
     ```
 
+    再開一個終端機視窗，啟動 Django-Q 背景 worker（負責非同步抓取 OG 預覽）：
+
+    ```bash
+    python manage.py qcluster
+    ```
+
+    > 若未啟動 worker，OG 預覽會一直停留在「處理中」（pending）狀態。
+
 7. **訪問應用程式：**
 
     * **網站首頁**：[http://localhost:8000](http://localhost:8000)
@@ -201,7 +210,8 @@ ninja_shortener/
 ├── shortener/                # 核心短網址應用
 │   ├── models.py             # 資料庫模型（Link、LinkPreview）
 │   ├── api.py                # Django Ninja API 端點
-│   ├── views.py              # 頁面視圖與重定向邏輯
+│   ├── views.py              # 頁面視圖、重定向、預覽狀態端點
+│   ├── services.py           # 共用業務邏輯（建立連結、OG 抓取與背景任務）
 │   ├── utils.py              # 短碼生成工具（Sqids）
 │   ├── validators.py         # 驗證器（URL、自訂 slug）
 │   ├── og_parser.py          # Open Graph 資料抓取（含 SSRF 防護）
@@ -215,7 +225,8 @@ ninja_shortener/
 └── theme/                    # Django 主題與模板
     ├── templates/            # HTML 模板
     │   ├── home.html         # 首頁（短網址建立）
-    │   ├── dashboard.html    # 儀表板（用戶連結管理）
+    │   ├── dashboard.html    # 儀表板（用戶連結管理、OG 預覽輪詢）
+    │   ├── partials/         # 共用局部模板（OG 預覽卡片）
     │   └── expired.html      # 過期連結頁面
     └── static_src/           # Tailwind CSS 原始檔
 ```
@@ -226,7 +237,7 @@ ninja_shortener/
 * **詳細的分析儀表板**：提供更多點擊數據，如時間、來源、地理位置等。
 * **自訂短網址**：允許使用者自訂短網址的代碼。✅ 已完成
 * **QR Code 產生**：為每個短網址產生對應的 QR Code。✅ 已完成
-* **OG 抓取異步化**：將 Open Graph 資料抓取改為異步處理（Celery + Redis 或 Huey），避免阻塞 API 請求。
+* **OG 抓取異步化**：將 Open Graph 資料抓取改為異步處理（Django-Q2，以 PostgreSQL 為 broker），避免阻塞 API 請求。✅ 已完成
 * **快取層**：使用 Redis 快取熱門連結和 OG 預覽資料。
 * **API 速率限制**：實作 rate limiting 防止濫用。
 

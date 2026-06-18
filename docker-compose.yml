@@ -33,6 +33,15 @@ services:
         django-postgres:
           condition: service_started
 
+    qcluster:
+      # Django-Q2 背景 worker：處理 OG 抓取等非同步任務
+      <<: *x-base-app
+      command: bash -c "python manage.py qcluster"
+      restart: "unless-stopped"
+      depends_on:
+        django-postgres:
+          condition: service_started
+
     django-postgres:
       image: postgres:18
       # ports:

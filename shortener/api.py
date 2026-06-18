@@ -15,7 +15,7 @@ from .services import (
     ShortCodeGenerationError,
     SlugAlreadyExistsError,
     create_short_link,
-    fetch_and_save_preview,
+    enqueue_preview_fetch,
 )
 from .validators import validate_custom_slug
 
@@ -167,13 +167,13 @@ def _link_to_response(link: Link) -> dict:
 )
 def shorten_url(request, payload: ShortenRequest):
     """
-    建立短網址並同步抓取 OG 預覽資料
+    建立短網址，並將 OG 預覽抓取排入背景佇列
 
     - 需要 JWT 認證
     - 每位用戶最多可建立 1000 個連結
     - 可選擇自訂 slug 或使用自動生成
-    - 同步抓取目標網址的 Open Graph 資料
-    - 如果抓取失敗，仍會建立短網址，但 preview.fetch_status 為 failed
+    - OG 預覽改由 Django-Q 背景抓取，建立後立即回應（preview.fetch_status 為 pending）
+    - 可透過 GET /links/{short_code} 輪詢最終的 preview 狀態
     """
     owner = request.user
 
@@ -200,16 +200,10 @@ def shorten_url(request, payload: ShortenRequest):
     except ShortCodeGenerationError:
         return 500, {'detail': '系統發生錯誤，請稍後再試'}
 
-    # TODO: 異步化優化點
-    # 目前 OG 資料同步抓取，若目標網站響應慢（>10秒）會阻塞 API 響應
-    # 優化建議：
-    # 1. Celery + Redis：生產環境推薦，需增加 Redis 和 Worker 服務
-    # 2. Huey：輕量替代方案
-    # 3. Django Q：與 Django 整合更緊密
-    # 4. 立即返回 + 前端輪詢：先返回 pending 狀態，前端輪詢 preview 結果
-    fetch_and_save_preview(link)
+    # OG 抓取改為 Django-Q 背景任務，建立後立即回應，不被目標網站拖慢
+    enqueue_preview_fetch(link)
 
-    # 重新載入 link 以取得 preview 關聯
+    # 重新載入以取得 preview 關聯（此時通常為 pending，由背景 worker 後續填入）
     link.refresh_from_db()
 
     return 200, _link_to_response(link)
@@ -222,11 +216,11 @@ def shorten_url(request, payload: ShortenRequest):
 )
 def refresh_link_preview(request, short_code: str):
     """
-    手動重新抓取指定短網址的 OG 預覽資料
+    手動將指定短網址的 OG 預覽重新排入背景抓取
 
     - 需要 JWT 認證
     - 只有連結擁有者可以重新抓取
-    - 會覆蓋現有的預覽資料
+    - 立即把 preview 設為 pending 並回應，實際抓取由背景 worker 執行
     """
     link = get_object_or_404(Link, short_code=short_code)
 
@@ -234,8 +228,8 @@ def refresh_link_preview(request, short_code: str):
     if link.owner != request.user:
         return JsonResponse({'detail': '您沒有權限操作此連結'}, status=403)
 
-    # 重新抓取 OG 資料
-    fetch_and_save_preview(link)
+    # 重新排入背景抓取（覆蓋為 pending）
+    enqueue_preview_fetch(link)
     link.refresh_from_db()
 
     return _link_to_response(link)

@@ -7,7 +7,9 @@ from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db.models import F
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views import generic
@@ -17,7 +19,7 @@ from .services import (
     ShortCodeGenerationError,
     SlugAlreadyExistsError,
     create_short_link,
-    fetch_and_save_preview,
+    enqueue_preview_fetch,
 )
 from .validators import validate_custom_slug, validate_url_scheme
 
@@ -116,7 +118,7 @@ def shorten_url_view(request):
                         messages.error(request, str(e))
                         return redirect('home')
 
-            # 建立短網址（共用核心邏輯；Web 表單不在建立時同步抓取 OG）
+            # 建立短網址（共用核心邏輯）
             try:
                 link = create_short_link(
                     original_url=original_url,
@@ -130,6 +132,9 @@ def shorten_url_view(request):
             except ShortCodeGenerationError:
                 messages.error(request, '系統發生錯誤，請稍後再試')
                 return redirect('home')
+
+            # 將 OG 預覽抓取排入背景（非阻塞）；dashboard 會顯示骨架並輪詢更新
+            enqueue_preview_fetch(link)
 
             full_short_url = request.build_absolute_uri(f'/{link.short_code}')
             messages.success(request, "成功建立短網址！")
@@ -147,7 +152,7 @@ class RegisterView(generic.CreateView):
 
 @login_required
 def refresh_preview_view(request, short_code):
-    """手動重新抓取 OG 預覽資料"""
+    """手動將 OG 預覽重新排入背景抓取"""
     link = get_object_or_404(Link, short_code=short_code)
 
     # 權限檢查
@@ -155,15 +160,40 @@ def refresh_preview_view(request, short_code):
         messages.error(request, '您沒有權限操作此連結')
         return redirect('dashboard')
 
-    # 抓取 OG 資料（共用核心邏輯）
-    preview = fetch_and_save_preview(link)
-
-    if preview.fetch_status == LinkPreview.FetchStatus.SUCCESS:
-        messages.success(request, '預覽資料已更新')
-    else:
-        messages.warning(request, f'抓取失敗：{preview.fetch_error}')
+    # 重新排入背景抓取（前端會輪詢骨架直到完成）
+    enqueue_preview_fetch(link)
+    messages.success(request, '已開始重新抓取預覽，稍候會自動更新')
 
     return redirect('dashboard')
+
+
+@login_required
+def preview_status_view(request, short_code):
+    """
+    回傳單一連結 OG 預覽的目前狀態與卡片 HTML（供 dashboard 前端輪詢局部更新）。
+
+    - 需登入且為連結擁有者
+    - 回傳 {status, html}；html 是與 dashboard 共用的 _preview_card 局部模板
+    """
+    link = get_object_or_404(
+        Link.objects.select_related('preview'),
+        short_code=short_code,
+    )
+
+    if link.owner != request.user:
+        return JsonResponse({'detail': '您沒有權限查看此連結'}, status=403)
+
+    try:
+        status = link.preview.fetch_status
+    except LinkPreview.DoesNotExist:
+        status = 'none'
+
+    html = render_to_string(
+        'partials/_preview_card.html',
+        {'link': link},
+        request=request,
+    )
+    return JsonResponse({'status': status, 'html': html})
 
 
 @login_required

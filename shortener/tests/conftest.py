@@ -47,6 +47,28 @@ def reset_ninja_registry():
         NinjaAPI._registry = []
 
 
+@pytest.fixture(autouse=True)
+def run_q_tasks_sync(monkeypatch):
+    """
+    測試時讓排入的背景任務同步執行，免啟動 qcluster / broker，
+    並預設樁住 OG 抓取以避免真實對外網路請求。
+
+    - async_task → 直接同步呼叫 run_preview_fetch，使「建立 → 抓取 → 寫入
+      preview」在單一請求內完成、便於斷言。
+    - fetch_og_data → 預設回傳空 OGData（不連網）。需要特定 OG 結果的測試可
+      自行 patch shortener.services.fetch_og_data 覆蓋；需要驗證「只入列、不
+      執行」的測試可在內層 patch async_task 覆蓋。
+    """
+    from shortener import services
+    from shortener.og_parser import OGData
+
+    def _run_inline(func, *args, **kwargs):
+        return services.run_preview_fetch(*args)
+
+    monkeypatch.setattr(services, 'async_task', _run_inline)
+    monkeypatch.setattr(services, 'fetch_og_data', lambda *args, **kwargs: OGData())
+
+
 # =============================================================================
 # 用戶 Fixtures
 # =============================================================================

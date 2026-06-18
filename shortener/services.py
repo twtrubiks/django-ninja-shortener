@@ -11,6 +11,7 @@ from typing import Optional
 from django.contrib.auth.models import User
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from django_q.tasks import async_task
 
 from .models import Link, LinkPreview
 from .og_parser import OGParserError, fetch_og_data
@@ -121,3 +122,41 @@ def fetch_and_save_preview(link: Link) -> LinkPreview:
 
     preview.save()
     return preview
+
+
+def enqueue_preview_fetch(link: Link) -> None:
+    """
+    將 OG 抓取排入背景佇列（非阻塞）。
+
+    先把 preview 標記為 PENDING（前端據此顯示骨架載入），再交給
+    Django-Q worker 非同步執行實際抓取，呼叫端可立即回應、不被目標網站拖慢。
+
+    Args:
+        link: 目標 Link 實例
+    """
+    LinkPreview.objects.update_or_create(
+        link=link,
+        defaults={
+            'fetch_status': LinkPreview.FetchStatus.PENDING,
+            'fetch_error': '',
+        },
+    )
+    async_task('shortener.services.run_preview_fetch', link.id)
+
+
+def run_preview_fetch(link_id: int) -> None:
+    """
+    Django-Q 背景任務：依 link_id 載入 Link 並抓取 OG 預覽。
+
+    以主鍵（而非 Link 物件）作為參數，避免序列化整個 model 實例；
+    連結若在排程後才被刪除則安全略過。
+
+    Args:
+        link_id: Link 主鍵
+    """
+    try:
+        link = Link.objects.get(id=link_id)
+    except Link.DoesNotExist:
+        return
+
+    fetch_and_save_preview(link)

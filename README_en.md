@@ -28,7 +28,7 @@ With registration, you get more features like click tracking, expiration dates, 
 * **Short URL Expiration**: Set expiration time for short URLs (1 hour, 1 day, 7 days, 30 days, or permanent).
 * **Short URL Redirection**: Clicking a short URL redirects the user to the original long URL, using atomic updates to prevent race conditions.
 * **Click Tracking**: The system automatically counts the number of clicks for each short URL.
-* **Open Graph Preview**: Automatically fetches OG data (title, description, image) from target pages, with manual refresh support.
+* **Open Graph Preview**: Fetches OG data (title, description, image) from target pages **asynchronously** via a Django-Q background worker, so creating a short URL is never blocked by a slow target site; the dashboard shows a skeleton loader and auto-polls for updates, with manual re-fetch support.
 * **QR Code Generation**: Generate QR codes for each short URL, supporting multiple sizes (128/256/512px) and custom colors.
 * **Personal Dashboard**: Paginated display of all user's short URLs and statistics, with link deletion support.
 * **Link Limit**: Each logged-in user can create up to 1000 links.
@@ -47,7 +47,8 @@ With registration, you get more features like click tracking, expiration dates, 
 * **Short Code Generation**: Uses [Sqids](https://sqids.org/) to generate from database ID (zero collision design)
 * **QR Code**: Uses [Segno](https://segno.readthedocs.io/) for QR code generation
 * **OG Parsing**: Uses [metadata_parser](https://github.com/jvanasco/metadata_parser) for Open Graph data parsing
-* **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial) (109 test cases, 93% coverage)
+* **Async Tasks**: Uses [Django-Q2](https://django-q2.readthedocs.io/) to fetch OG data in the background (with PostgreSQL ORM as the broker, no extra Redis required)
+* **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial) (118 test cases, 94% coverage)
 * **Containerization**: [Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 Quick Start (Using Docker, Recommended)
@@ -64,7 +65,7 @@ This is the recommended way to get started, as it ensures a consistent developme
     docker compose up --build
     ```
 
-    This command will build the Docker image, install dependencies, run database migrations, and start the development server.
+    This command will build the Docker image, install dependencies, run database migrations, and start all services: the Django development server, PostgreSQL, the Tailwind compiler, and `qcluster` (the Django-Q background worker that fetches OG previews asynchronously).
 
 2. **Create a superuser (Optional):**
 
@@ -140,6 +141,14 @@ If you prefer to set up the environment directly on your local machine.
     python manage.py tailwind start
     ```
 
+    In a third terminal, start the Django-Q background worker (which fetches OG previews asynchronously):
+
+    ```bash
+    python manage.py qcluster
+    ```
+
+    > Without the worker running, OG previews will stay in the "pending" state.
+
 7. **Access the application:**
 
     * **Website Homepage**: [http://localhost:8000](http://localhost:8000)
@@ -201,7 +210,8 @@ ninja_shortener/
 ├── shortener/                # Core shortener application
 │   ├── models.py             # Database models (Link, LinkPreview)
 │   ├── api.py                # Django Ninja API endpoints
-│   ├── views.py              # Page views and redirection logic
+│   ├── views.py              # Page views, redirection, preview-status endpoint
+│   ├── services.py           # Shared business logic (link creation, OG fetch & background task)
 │   ├── utils.py              # Short code generation utility (Sqids)
 │   ├── validators.py         # Validators (URL, custom slug)
 │   ├── og_parser.py          # Open Graph data fetching (with SSRF protection)
@@ -215,7 +225,8 @@ ninja_shortener/
 └── theme/                    # Django theme and templates
     ├── templates/            # HTML templates
     │   ├── home.html         # Homepage (short URL creation)
-    │   ├── dashboard.html    # Dashboard (user link management)
+    │   ├── dashboard.html    # Dashboard (user link management, OG preview polling)
+    │   ├── partials/         # Shared partial templates (OG preview card)
     │   └── expired.html      # Expired link page
     └── static_src/           # Tailwind CSS source files
 ```
@@ -226,7 +237,7 @@ ninja_shortener/
 * **Detailed Analytics Dashboard**: Provide more click data, such as time, source, geolocation, etc.
 * **Custom Short URLs**: Allow users to customize the short code for their URLs. ✅ Completed
 * **QR Code Generation**: Generate a QR code for each short URL. ✅ Completed
-* **Asynchronous OG Fetching**: Make Open Graph data fetching asynchronous (Celery + Redis or Huey) to avoid blocking API requests.
+* **Asynchronous OG Fetching**: Make Open Graph data fetching asynchronous (Django-Q2, with PostgreSQL as the broker) to avoid blocking API requests. ✅ Completed
 * **Caching Layer**: Use Redis to cache popular links and OG preview data.
 * **API Rate Limiting**: Implement rate limiting to prevent abuse.
 

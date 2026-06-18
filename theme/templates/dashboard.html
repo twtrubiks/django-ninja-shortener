@@ -88,96 +88,12 @@
             </div>
           </div>
 
-          <!-- OG Preview Card -->
-          {% if link.preview %}
-            <div class="border-t border-gray-100 pt-4 mt-4">
-              {% if link.preview.fetch_status == 'success' and link.preview.has_preview_data %}
-                <!-- Success with data -->
-                <div class="flex gap-4">
-                  {% if link.preview.og_image %}
-                    <div class="flex-shrink-0 w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
-                      <img src="{{ link.preview.og_image }}"
-                           alt="{% if link.preview.og_title %}{{ link.preview.og_title }} 的預覽圖片{% else %}連結預覽圖片{% endif %}"
-                           class="w-full h-full object-cover"
-                           onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                      <div class="hidden w-full h-full items-center justify-center bg-gray-100">
-                        <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                        </svg>
-                      </div>
-                    </div>
-                  {% endif %}
-                  <div class="flex-1 min-w-0">
-                    {% if link.preview.og_title %}
-                      <h4 class="font-medium text-gray-900 truncate">
-                        {{ link.preview.og_title|truncatechars:80 }}
-                      </h4>
-                    {% endif %}
-                    {% if link.preview.og_description %}
-                      <p class="text-sm text-gray-600 mt-1 line-clamp-2">
-                        {{ link.preview.og_description|truncatechars:150 }}
-                      </p>
-                    {% endif %}
-                    {% if link.preview.og_site_name %}
-                      <p class="text-xs text-gray-500 mt-1">
-                        {{ link.preview.og_site_name }}
-                      </p>
-                    {% endif %}
-                  </div>
-                </div>
-              {% elif link.preview.fetch_status == 'failed' %}
-                <!-- Fetch failed -->
-                <div class="flex items-center gap-2 text-sm text-orange-700">
-                  <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <span>無法取得預覽：{{ link.preview.fetch_error|truncatechars:50 }}</span>
-                  <a href="{% url 'refresh_preview' link.short_code %}"
-                     class="ml-2 text-purple-600 hover:underline cursor-pointer focus-ring rounded">
-                    重新抓取
-                  </a>
-                </div>
-              {% elif link.preview.fetch_status == 'pending' %}
-                <!-- Pending with Skeleton Loading -->
-                <div class="flex gap-4">
-                  <div class="flex-shrink-0 w-24 h-24 skeleton rounded-lg"></div>
-                  <div class="flex-1 space-y-3">
-                    <div class="h-4 skeleton rounded w-3/4"></div>
-                    <div class="h-3 skeleton rounded w-full"></div>
-                    <div class="h-3 skeleton rounded w-2/3"></div>
-                  </div>
-                </div>
-                <p class="text-xs text-gray-500 mt-2 flex items-center gap-1">
-                  <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  預覽資料處理中...
-                </p>
-              {% else %}
-                <!-- Success but no OG data -->
-                <div class="flex items-center justify-between text-sm text-gray-500">
-                  <span>此網頁未提供預覽資訊</span>
-                  <a href="{% url 'refresh_preview' link.short_code %}"
-                     class="text-purple-600 hover:underline cursor-pointer focus-ring rounded">
-                    重新抓取
-                  </a>
-                </div>
-              {% endif %}
-            </div>
-          {% else %}
-            <!-- Preview not yet fetched -->
-            <div class="border-t border-gray-100 pt-4 mt-4">
-              <div class="flex items-center justify-between text-sm text-gray-500">
-                <span>尚未抓取預覽資料</span>
-                <a href="{% url 'refresh_preview' link.short_code %}"
-                   class="text-purple-600 hover:underline cursor-pointer focus-ring rounded">
-                  抓取預覽
-                </a>
-              </div>
-            </div>
-          {% endif %}
+          <!-- OG Preview Card（pending 時由 dashboard 輪詢 JS 局部更新） -->
+          <div class="preview-container"
+               data-short-code="{{ link.short_code }}"
+               data-status="{% if link.preview %}{{ link.preview.fetch_status }}{% else %}none{% endif %}">
+            {% include "partials/_preview_card.html" with link=link %}
+          </div>
         </div>
       {% endfor %}
     </div>
@@ -478,5 +394,63 @@ function disableTrapFocus(modal) {
     modalControllers.delete(modal);
   }
 }
+
+// ── OG 預覽輪詢 ──────────────────────────────────────────────
+// 建立短網址後 OG 抓取在背景（Django-Q）進行，preview 為 pending。
+// 這裡每 2 秒查詢仍在 pending 的卡片，完成後局部抽換卡片 HTML，免整頁重整。
+(function () {
+  const POLL_INTERVAL_MS = 2000;
+  let timer = null;
+
+  function pendingContainers() {
+    return Array.from(
+      document.querySelectorAll('.preview-container[data-status="pending"]')
+    );
+  }
+
+  async function pollOnce() {
+    const pending = pendingContainers();
+    if (pending.length === 0) {
+      stopPolling();
+      return;
+    }
+
+    await Promise.all(pending.map(async (el) => {
+      const shortCode = el.dataset.shortCode;
+      if (!shortCode) return;
+      try {
+        const res = await fetch(
+          `/links/${encodeURIComponent(shortCode)}/preview-status/`,
+          { headers: { 'X-Requested-With': 'XMLHttpRequest' } }
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status && data.status !== 'pending') {
+          el.innerHTML = data.html;
+          el.dataset.status = data.status;
+        }
+      } catch (e) {
+        // 網路錯誤：維持 pending，下一輪再試
+      }
+    }));
+  }
+
+  function startPolling() {
+    if (timer) return;
+    if (pendingContainers().length > 0) {
+      timer = setInterval(pollOnce, POLL_INTERVAL_MS);
+    }
+  }
+
+  function stopPolling() {
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+  }
+
+  // 此 <script> 位於卡片之後，DOM 已解析完成，直接啟動
+  startPolling();
+})();
 </script>
 {% endblock %}

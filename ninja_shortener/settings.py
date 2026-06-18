@@ -46,6 +46,9 @@ INSTALLED_APPS = [
     "ninja_jwt.token_blacklist",
     "shortener",
 
+    # 非同步任務佇列
+    "django_q",
+
     # django-tailwind
     "tailwind",
     "theme",
@@ -102,6 +105,22 @@ DATABASES = {
         "HOST": "django-postgres",
         "PORT": 5432,
     }
+}
+
+
+# Django-Q2 非同步任務佇列
+# 直接用既有的 Postgres 當 broker（ORM broker），不需額外的 Redis 服務。
+# 背景 worker 由 docker-compose 的 qcluster 服務執行：python manage.py qcluster
+Q_CLUSTER = {
+    'name': 'ninja_shortener',
+    'workers': 2,
+    'recycle': 500,
+    'timeout': 60,
+    'retry': 120,
+    'queue_limit': 50,
+    'bulk': 10,
+    'orm': 'default',  # 使用 Django ORM（Postgres）作為 broker
+    'catch_up': False,  # 重啟後不補跑錯過的排程任務
 }
 
 
