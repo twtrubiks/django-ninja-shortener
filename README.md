@@ -33,7 +33,8 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 * **個人儀表板**：分頁顯示用戶的所有短網址及其統計資料，支援連結刪除功能。
 * **連結數量限制**：每位登入用戶最多可建立 1000 個連結。
 * **RESTful API**：完整的 API 端點，使用 JWT 認證。
-* **安全防護**：SSRF 防護、URL 協議驗證、CSRF 保護、TOCTOU 競態條件防護。
+* **安全防護**：SSRF 防護（解析實際 IP 後以 `ipaddress` 物件化檢查，涵蓋十進位 / hex / octal / IPv6-mapped 等編碼繞過，並對每個重定向目標重新驗證；DNS rebinding 列為已知限制）、URL 協議驗證、CSRF 保護、TOCTOU 競態條件防護。
+* **設定環境變數化**：`SECRET_KEY`、`DEBUG`、`ALLOWED_HOSTS`、資料庫帳密皆可由環境變數注入；生產環境（`DEBUG=False`）若仍沿用內建預設金鑰會直接拒絕啟動。詳見下方〈環境變數與生產環境設定〉一節。
 * **Docker 支援**：提供 Dockerfile 和 Docker Compose 設定，簡化開發與部署流程。
 
 ## 🛠️ 技術棧
@@ -154,6 +155,29 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
     * **網站首頁**：[http://localhost:8000](http://localhost:8000)
 
     * **API 文件 (Swagger UI)**：[http://localhost:8000/api/docs](http://localhost:8000/api/docs)
+
+## 🔐 環境變數與生產環境設定
+
+機敏設定不再寫死在 `settings.py`，改由環境變數注入。專案根目錄提供 `.env.example` 作為範本，**未設定任何環境變數時會沿用與開發一致的預設值**（因此 Docker 與本地都能直接跑起來；`docker compose` 會自動讀取根目錄的 `.env`）。
+
+```bash
+cp .env.example .env   # 之後依環境調整 .env 內容
+```
+
+| 環境變數 | 用途 | 預設值 |
+| --- | --- | --- |
+| `DJANGO_SECRET_KEY` | Django 金鑰，同時用於 JWT 簽章 | 內建 insecure 開發金鑰 |
+| `DJANGO_DEBUG` | 是否開啟 Debug 模式 | `True` |
+| `DJANGO_ALLOWED_HOSTS` | 允許的主機名（逗號分隔） | `*` |
+| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | 資料庫名稱 / 帳號 / 密碼 | `postgres` / `myuser` / `password123` |
+| `POSTGRES_HOST` / `POSTGRES_PORT` | 資料庫位址 / 連接埠 | `django-postgres` / `5432` |
+
+**上生產環境前務必：**
+
+* 將 `DJANGO_SECRET_KEY` 換成隨機長字串（可用 `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"` 生成）。此金鑰同時是 JWT 簽章金鑰，外洩等同可偽造任意使用者的 token。
+* 設定 `DJANGO_DEBUG=False`。為避免誤用，當 `DEBUG=False` 卻仍沿用內建預設金鑰時，應用程式會直接拒絕啟動。
+* 將 `DJANGO_ALLOWED_HOSTS` 設為實際網域（例如 `example.com,www.example.com`）。
+* 使用強資料庫密碼，且不要將實際的 `.env` 提交進版控（`.gitignore` 已忽略 `.env`，僅保留 `.env.example`）。
 
 ## 🧪 運行測試
 

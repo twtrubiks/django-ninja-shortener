@@ -4,7 +4,9 @@ Open Graph 資料解析模組
 使用 metadata_parser 套件抓取網頁的 OG meta 標籤
 """
 
+import ipaddress
 import logging
+import socket
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
 
@@ -22,31 +24,20 @@ USER_AGENT = (
     '+https://github.com/twtrubiks/django-ninja-shortener)'
 )
 
-# 阻擋的私有 IP 範圍 (SSRF 防護)
-BLOCKED_IP_PREFIXES = (
-    '10.',
-    '172.16.',
-    '172.17.',
-    '172.18.',
-    '172.19.',
-    '172.20.',
-    '172.21.',
-    '172.22.',
-    '172.23.',
-    '172.24.',
-    '172.25.',
-    '172.26.',
-    '172.27.',
-    '172.28.',
-    '172.29.',
-    '172.30.',
-    '172.31.',
-    '192.168.',
-    '127.',
-    '0.',
-    '169.254.',  # link-local
-)
+# SSRF 防護
+#
+# 重要：不可用「hostname 字串前綴」判斷是否為內網位址。字串比對會被整組繞過——
+# 十進位（http://2130706433/）、hex（0x7f000001）、octal（0177.0.0.1）、
+# IPv6-mapped（[::ffff:127.0.0.1]），以及「公開域名解析到內網 / 雲端 metadata」。
+#
+# 正確做法：用「實際連線會用到的同一個解析器」(socket.getaddrinfo) 把 hostname
+# 解析成真正的 IP，再對每個 IP 做物件化的範圍檢查（見 _is_ip_blocked）。
+#
+# 已知限制：本模組在「驗證」與「連線」之間各做一次 DNS 解析，理論上仍存在
+# DNS rebinding 的 TOCTOU 窗口（同一域名兩次解析回不同 IP）。要徹底消除需把連線
+# 釘死在已驗證的 IP（自訂 HTTPAdapter）；目前以逐跳重驗 + 全 IP 檢查作為務實緩解。
 
+# 明確封鎖的主機名（防禦縱深；真正的保護以下方 IP 解析為準）
 BLOCKED_HOSTNAMES = (
     'localhost',
     'localhost.localdomain',
@@ -93,16 +84,51 @@ class InvalidURLError(OGParserError):
     pass
 
 
+def _is_ip_blocked(ip_str: str) -> bool:
+    """
+    判斷單一 IP 是否落在禁止存取的範圍（私有 / 迴環 / link-local / 保留等）。
+
+    會拆解 IPv6 內嵌的 IPv4（IPv4-mapped、6to4），避免 ::ffff:127.0.0.1
+    這類包裝形式繞過檢查。
+    """
+    # 去掉 IPv6 的 scope id（例如 fe80::1%eth0）再解析
+    ip_str = ip_str.split('%')[0]
+
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        # getaddrinfo 理論上只會回合法 IP；無法解析時保守視為不可信
+        return True
+
+    # 拆出 IPv6 內嵌的 IPv4 後再判斷
+    if isinstance(ip, ipaddress.IPv6Address):
+        mapped = ip.ipv4_mapped or ip.sixtofour
+        if mapped is not None:
+            ip = mapped
+
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
+
 def _validate_url_security(url: str) -> None:
     """
-    驗證 URL 安全性，防止 SSRF 攻擊
+    驗證 URL 安全性，防止 SSRF 攻擊。
+
+    解析 hostname 為實際 IP（涵蓋十進位 / hex / octal 整數 IP、IPv6，以及
+    公開域名解析到內網），再逐一檢查每個 IP 是否落在禁止範圍。
 
     Args:
         url: 要驗證的 URL
 
     Raises:
-        SSRFBlockedError: 如果 URL 指向私有/內部網路
-        InvalidURLError: 如果 URL 格式無效
+        SSRFBlockedError: 如果 URL 解析到私有 / 內部 / 保留位址
+        InvalidURLError: 如果 URL 格式無效或主機名無法解析
     """
     try:
         parsed = urlparse(url)
@@ -110,30 +136,41 @@ def _validate_url_security(url: str) -> None:
         raise InvalidURLError(f'無法解析 URL: {e}')
 
     # 檢查協議
-    if parsed.scheme.lower() not in ('http', 'https'):
+    scheme = parsed.scheme.lower()
+    if scheme not in ('http', 'https'):
         raise InvalidURLError(f'不支援的協議: {parsed.scheme}')
 
     hostname = parsed.hostname
     if not hostname:
         raise InvalidURLError('URL 缺少主機名')
 
-    # 檢查被阻擋的主機名
-    hostname_lower = hostname.lower()
-    if hostname_lower in BLOCKED_HOSTNAMES:
+    # 明確封鎖的主機名（防禦縱深）
+    if hostname.lower() in BLOCKED_HOSTNAMES:
         raise SSRFBlockedError(f'禁止存取內部主機: {hostname}')
 
-    # 檢查 IP 位址
-    if any(hostname.startswith(prefix) for prefix in BLOCKED_IP_PREFIXES):
-        raise SSRFBlockedError(f'禁止存取私有 IP 範圍: {hostname}')
+    # 用與實際連線相同的解析器解析所有候選 IP。getaddrinfo 會套用 inet_aton
+    # 語意，把 2130706433 / 0x7f000001 / 0177.0.0.1 之類的整數寫法正規化成真正
+    # 的 IP，並涵蓋公開域名指向內網 / 雲端 metadata 的情況。
+    port = parsed.port or (443 if scheme == 'https' else 80)
+    try:
+        addrinfos = socket.getaddrinfo(hostname, port, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as e:
+        raise InvalidURLError(f'無法解析主機名 {hostname}: {e}')
 
-    # 檢查 IPv6 localhost
-    if hostname in ('::', '::1'):
-        raise SSRFBlockedError('禁止存取 IPv6 localhost')
+    for info in addrinfos:
+        ip_str = info[4][0]
+        if _is_ip_blocked(ip_str):
+            raise SSRFBlockedError(
+                f'禁止存取內部 / 保留位址: {hostname} -> {ip_str}'
+            )
 
 
 def _fetch_with_safe_redirects(url: str, timeout: int) -> requests.Response:
     """
-    安全地抓取 URL，驗證每個重定向目標以防止 DNS 重綁定攻擊
+    安全地抓取 URL，對「起始 URL 與每一次重定向目標」都重新做 SSRF 驗證。
+
+    注意：驗證與實際連線各自解析一次 DNS，無法完全防止單一 hostname 的 DNS
+    rebinding；徹底防護需把連線釘死在已驗證的 IP（見 _validate_url_security 註解）。
 
     Args:
         url: 目標 URL

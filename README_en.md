@@ -33,7 +33,8 @@ With registration, you get more features like click tracking, expiration dates, 
 * **Personal Dashboard**: Paginated display of all user's short URLs and statistics, with link deletion support.
 * **Link Limit**: Each logged-in user can create up to 1000 links.
 * **RESTful API**: Complete API endpoints with JWT authentication.
-* **Security Protection**: SSRF protection, URL protocol validation, CSRF protection, TOCTOU race condition prevention.
+* **Security Protection**: SSRF protection (resolves the actual IP and performs object-level checks via `ipaddress`, covering decimal / hex / octal / IPv6-mapped encoding bypasses, and re-validates every redirect target; DNS rebinding is a known limitation), URL protocol validation, CSRF protection, TOCTOU race condition prevention.
+* **Environment-based Configuration**: `SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, and database credentials can all be injected via environment variables; in production (`DEBUG=False`) the app refuses to start if the built-in default key is still in use. See the "Environment Variables & Production Setup" section below.
 * **Docker Support**: Includes Dockerfile and Docker Compose setup to simplify development and deployment.
 
 ## 🛠️ Tech Stack
@@ -154,6 +155,29 @@ If you prefer to set up the environment directly on your local machine.
     * **Website Homepage**: [http://localhost:8000](http://localhost:8000)
 
     * **API Documentation (Swagger UI)**: [http://localhost:8000/api/docs](http://localhost:8000/api/docs)
+
+## 🔐 Environment Variables & Production Setup
+
+Sensitive settings are no longer hard-coded in `settings.py`; they are injected via environment variables. A `.env.example` template is provided at the project root. **When no environment variables are set, the built-in development defaults are used**, so both Docker and local setups run out of the box (`docker compose` automatically reads the root `.env`).
+
+```bash
+cp .env.example .env   # then adjust .env for your environment
+```
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `DJANGO_SECRET_KEY` | Django secret key, also used for JWT signing | built-in insecure dev key |
+| `DJANGO_DEBUG` | Enable debug mode | `True` |
+| `DJANGO_ALLOWED_HOSTS` | Allowed hostnames (comma-separated) | `*` |
+| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Database name / user / password | `postgres` / `myuser` / `password123` |
+| `POSTGRES_HOST` / `POSTGRES_PORT` | Database host / port | `django-postgres` / `5432` |
+
+**Before going to production, be sure to:**
+
+* Replace `DJANGO_SECRET_KEY` with a long random string (generate one with `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`). This key also signs JWTs — leaking it is equivalent to being able to forge any user's token.
+* Set `DJANGO_DEBUG=False`. As a safeguard, the app refuses to start when `DEBUG=False` while the built-in default key is still in use.
+* Set `DJANGO_ALLOWED_HOSTS` to your real domains (e.g. `example.com,www.example.com`).
+* Use a strong database password, and never commit your actual `.env` (it is already ignored by `.gitignore`; only `.env.example` is tracked).
 
 ## 🧪 Running Tests
 

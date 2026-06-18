@@ -4,6 +4,17 @@ x-base-app-setting: &x-base-app
   build: .
   volumes:
     - .:/ninja_shortener
+  # 機敏設定改由環境變數注入；未設定時沿用與程式內建一致的開發預設值。
+  # 可在專案根目錄建立 .env（compose 會自動讀取）覆蓋這些值。
+  environment:
+    - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-}
+    - DJANGO_DEBUG=${DJANGO_DEBUG:-True}
+    - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-*}
+    - POSTGRES_DB=${POSTGRES_DB:-postgres}
+    - POSTGRES_USER=${POSTGRES_USER:-myuser}
+    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password123}
+    - POSTGRES_HOST=${POSTGRES_HOST:-django-postgres}
+    - POSTGRES_PORT=${POSTGRES_PORT:-5432}
 
 services:
 
@@ -47,9 +58,9 @@ services:
       # ports:
       #   - "5432:5432"
       environment:
-        - POSTGRES_DB=postgres
-        - POSTGRES_USER=myuser
-        - POSTGRES_PASSWORD=password123
+        - POSTGRES_DB=${POSTGRES_DB:-postgres}
+        - POSTGRES_USER=${POSTGRES_USER:-myuser}
+        - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password123}
         - PGDATA=/var/lib/postgresql/data/pgdata
       volumes:
         - db-data:/var/lib/postgresql/data/pgdata

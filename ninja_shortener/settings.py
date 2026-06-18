@@ -10,23 +10,55 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 from datetime import timedelta
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# 從專案根目錄的 .env 載入環境變數（需安裝 python-dotenv 且檔案存在）。
+# 真實環境變數（例如 docker-compose 注入的）優先，不會被 .env 覆蓋。
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(BASE_DIR / '.env')
+except ImportError:
+    pass
+
+
+def _env_bool(key: str, default: bool) -> bool:
+    return os.environ.get(key, str(default)).strip().lower() in ('1', 'true', 'yes', 'on')
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-&_pxuooakj!0zuj^@vxe-ra^k9iz*r5jxi145#vw9*#4_v@rs_'
+# 生產環境務必以環境變數 DJANGO_SECRET_KEY 覆蓋此預設值（見下方守門檢查）。
+SECRET_KEY = (
+    os.environ.get('DJANGO_SECRET_KEY')
+    or 'django-insecure-&_pxuooakj!0zuj^@vxe-ra^k9iz*r5jxi145#vw9*#4_v@rs_'
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = _env_bool('DJANGO_DEBUG', True)
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',')
+    if h.strip()
+]
+
+# 生產環境（DEBUG=False）禁止沿用內建的 insecure 預設金鑰。
+# SECRET_KEY 同時是 JWT 簽章金鑰（見 NINJA_JWT.SIGNING_KEY），一旦外洩等同
+# 可偽造任意使用者的 token，因此這裡硬性擋下，避免誤用預設值上線。
+if not DEBUG and SECRET_KEY.startswith('django-insecure-'):
+    raise ImproperlyConfigured(
+        '正式環境必須設定環境變數 DJANGO_SECRET_KEY（不可使用內建預設金鑰）'
+    )
 
 
 # Application definition
@@ -99,11 +131,11 @@ WSGI_APPLICATION = 'ninja_shortener.wsgi.application'
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql_psycopg2",
-        "NAME": "postgres",
-        "USER": "myuser",
-        "PASSWORD": "password123",
-        "HOST": "django-postgres",
-        "PORT": 5432,
+        "NAME": os.environ.get("POSTGRES_DB", "postgres"),
+        "USER": os.environ.get("POSTGRES_USER", "myuser"),
+        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "password123"),
+        "HOST": os.environ.get("POSTGRES_HOST", "django-postgres"),
+        "PORT": int(os.environ.get("POSTGRES_PORT", "5432")),
     }
 }
 
