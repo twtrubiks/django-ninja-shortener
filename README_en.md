@@ -33,7 +33,7 @@ With registration, you get more features like click tracking, expiration dates, 
 * **Personal Dashboard**: Paginated display of all user's short URLs and statistics, with link deletion support.
 * **Link Limit**: Each logged-in user can create up to 1000 links.
 * **RESTful API**: Complete API endpoints with JWT authentication.
-* **Security Protection**: SSRF protection (resolves the actual IP and performs object-level checks via `ipaddress`, covering decimal / hex / octal / IPv6-mapped encoding bypasses, and re-validates every redirect target; DNS rebinding is a known limitation), URL protocol validation, CSRF protection, TOCTOU race condition prevention.
+* **Security Protection**: SSRF protection (resolves the actual IP and performs object-level checks via `ipaddress`, covering decimal / hex / octal / IPv6-mapped encoding bypasses, and re-validates every redirect target; DNS rebinding is a known limitation), OG fetch response size limit (streamed read that caps decompressed bytes to guard against decompression bombs / oversized bodies exhausting the background worker), URL protocol validation, CSRF protection, TOCTOU race condition prevention.
 * **Environment-based Configuration**: `SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, and database credentials can all be injected via environment variables; in production (`DEBUG=False`) the app refuses to start if the built-in default key is still in use. See the "Environment Variables & Production Setup" section below.
 * **Docker Support**: Includes Dockerfile and Docker Compose setup to simplify development and deployment.
 
@@ -49,7 +49,7 @@ With registration, you get more features like click tracking, expiration dates, 
 * **QR Code**: Uses [Segno](https://segno.readthedocs.io/) for QR code generation
 * **OG Parsing**: Uses [metadata_parser](https://github.com/jvanasco/metadata_parser) for Open Graph data parsing
 * **Async Tasks**: Uses [Django-Q2](https://django-q2.readthedocs.io/) to fetch OG data in the background (with PostgreSQL ORM as the broker, no extra Redis required)
-* **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial) (118 test cases, 94% coverage)
+* **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial) (133 test cases, 94% coverage)
 * **Containerization**: [Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 Quick Start (Using Docker, Recommended)
@@ -238,7 +238,7 @@ ninja_shortener/
 │   ├── services.py           # Shared business logic (link creation, OG fetch & background task)
 │   ├── utils.py              # Short code generation utility (Sqids)
 │   ├── validators.py         # Validators (URL, custom slug)
-│   ├── og_parser.py          # Open Graph data fetching (with SSRF protection)
+│   ├── og_parser.py          # Open Graph data fetching (with SSRF protection, response size cap)
 │   ├── qr_utils.py           # QR code generation utility
 │   └── tests/                # Test suite
 │       ├── conftest.py       # Centralized pytest fixtures

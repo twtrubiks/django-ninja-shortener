@@ -13,11 +13,13 @@ import requests
 from unittest.mock import MagicMock, patch
 
 from shortener.og_parser import (
+    MAX_RESPONSE_BYTES,
     OGData,
     OGParserError,
     SSRFBlockedError,
     FetchTimeoutError,
     InvalidURLError,
+    _read_capped_body,
     _validate_url_security,
     fetch_og_data,
 )
@@ -166,6 +168,7 @@ class TestFetchOGData:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.text = '<html></html>'
+        mock_response.iter_content.return_value = [b'<html></html>']
         mock_response.url = 'https://example.com'
         mock_get.return_value = mock_response
 
@@ -204,6 +207,7 @@ class TestFetchOGData:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.text = '<html></html>'
+        mock_response.iter_content.return_value = [b'<html></html>']
         mock_response.url = 'https://example.com'
         mock_get.return_value = mock_response
 
@@ -239,6 +243,7 @@ class TestFetchOGData:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.text = '<html></html>'
+        mock_response.iter_content.return_value = [b'<html></html>']
         mock_response.url = 'https://example.com/404'
         mock_get.return_value = mock_response
 
@@ -261,6 +266,7 @@ class TestFetchOGData:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.text = '<html></html>'
+        mock_response.iter_content.return_value = [b'<html></html>']
         mock_response.url = 'https://example.com'
         mock_get.return_value = mock_response
 
@@ -312,3 +318,73 @@ class TestOGDataClass:
         """有圖片時 is_empty 為 False"""
         og = OGData(image='https://example.com/img.jpg')
         assert og.is_empty is False
+
+
+class TestResponseSizeLimit:
+    """回應大小上限：防解壓縮炸彈 / 超大 body 撐爆背景 worker 記憶體。
+
+    iter_content 產出的是「已解壓」位元組，故以這些測試模擬「解壓後」的串流，
+    驗證 _read_capped_body 在跨過上限時截斷、不會無限累積。
+    """
+
+    def test_caps_oversized_body(self):
+        """解壓後總量超過上限時，主體應被截斷到 MAX_RESPONSE_BYTES"""
+        mock_response = MagicMock()
+        # 逐塊吐出，總和略超過上限
+        n_chunks = (MAX_RESPONSE_BYTES // 8192) + 10
+        mock_response.iter_content.return_value = [b'a' * 8192] * n_chunks
+
+        _read_capped_body(mock_response)
+
+        assert len(mock_response._content) == MAX_RESPONSE_BYTES
+        assert mock_response._content_consumed is True
+        # 跨過上限即停止迭代，連線應被關閉
+        mock_response.close.assert_called_once()
+
+    def test_decompression_bomb_single_huge_chunk(self):
+        """單一超巨塊（高壓縮比炸彈解出）也應被截斷，不會原樣保留整塊"""
+        mock_response = MagicMock()
+        # 一個 chunk 就遠超上限，模擬炸彈解壓後的單塊
+        mock_response.iter_content.return_value = [b'x' * (5 * 1024 * 1024)]
+
+        _read_capped_body(mock_response)
+
+        assert len(mock_response._content) == MAX_RESPONSE_BYTES
+
+    def test_small_body_not_truncated(self):
+        """未超過上限的正常回應應原樣保留"""
+        body = b'<html><head><title>ok</title></head></html>'
+        mock_response = MagicMock()
+        mock_response.iter_content.return_value = [body]
+
+        _read_capped_body(mock_response)
+
+        assert mock_response._content == body
+        assert mock_response._content_consumed is True
+
+    @patch('shortener.og_parser.socket.getaddrinfo', new=_fake_getaddrinfo)
+    @patch('shortener.og_parser.metadata_parser.MetadataParser')
+    @patch('shortener.og_parser.requests.Session.get')
+    def test_fetch_truncates_oversized_response(self, mock_get, mock_parser_class):
+        """端到端：超大回應不應拋錯，截斷後仍照常解析 OG"""
+        oversized_html = b'<html>' + b'A' * (MAX_RESPONSE_BYTES + 100_000)
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.url = 'https://example.com'
+        mock_response.iter_content.return_value = [oversized_html]
+        mock_get.return_value = mock_response
+
+        mock_parser = MagicMock()
+        mock_parser.parsed_result.metadata = {
+            'og': {'title': 'Big Page'},
+            'meta': {},
+            'page': {},
+            'dc': {},
+        }
+        mock_parser_class.return_value = mock_parser
+
+        result = fetch_og_data('https://example.com')
+
+        # 截斷後 _content 不超過上限
+        assert len(mock_response._content) == MAX_RESPONSE_BYTES
+        assert result.title == 'Big Page'

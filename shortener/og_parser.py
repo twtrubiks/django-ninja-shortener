@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 5  # 秒
 MAX_TIMEOUT = 30
 MAX_REDIRECTS = 5  # 最大重定向次數
+# 回應主體大小上限（解壓後）。防「解壓縮炸彈」與超大 body 撐爆背景 worker 記憶體：
+# 目標 URL 由使用者提供，惡意站點可回傳數 KB 的 gzip 卻解壓成數 GB。OG/meta 標籤都在
+# <head>，2 MiB 綽綽有餘；超出採截斷（而非整筆失敗），仍足以解析開頭的 <head>。
+MAX_RESPONSE_BYTES = 2 * 1024 * 1024  # 2 MiB
 USER_AGENT = (
     'Mozilla/5.0 (compatible; ShortenerBot/1.0; '
     '+https://github.com/twtrubiks/django-ninja-shortener)'
@@ -165,6 +169,40 @@ def _validate_url_security(url: str) -> None:
             )
 
 
+def _read_capped_body(response: requests.Response) -> None:
+    """串流讀取回應主體並對「解壓後」大小設硬上限，就地寫回 response._content。
+
+    為何用串流計數：requests 的 iter_content 產出的是「已解壓」位元組，逐塊累加長度
+    即可在跨過上限時立刻停止——不會把整顆 gzip/deflate 解壓縮炸彈解完（DEFLATE 單次
+    讀取的膨脹比約上限 1032:1，故暫態記憶體仍有界）。
+
+    超過上限採「截斷」而非整筆失敗：OG/meta 標籤位於 <head>（解析時亦 search_head_only），
+    保留開頭的 MAX_RESPONSE_BYTES 已足以取得預覽，對超大但合法的頁面更友善。
+
+    讀畢把位元組塞回 response._content 並標記已消費，讓上層照常使用 response.text
+    （沿用 requests 自身的字元集偵測）。
+    """
+    chunks = []
+    total = 0
+    truncated = False
+    for chunk in response.iter_content(chunk_size=8192):
+        chunks.append(chunk)
+        total += len(chunk)
+        if total >= MAX_RESPONSE_BYTES:
+            truncated = True
+            break
+
+    response._content = b''.join(chunks)[:MAX_RESPONSE_BYTES]
+    response._content_consumed = True
+    response.close()
+
+    if truncated:
+        logger.info(
+            f'Response body from {response.url} exceeded '
+            f'{MAX_RESPONSE_BYTES} bytes; truncated for OG parsing'
+        )
+
+
 def _fetch_with_safe_redirects(url: str, timeout: int) -> requests.Response:
     """
     安全地抓取 URL，對「起始 URL 與每一次重定向目標」都重新做 SSRF 驗證。
@@ -191,18 +229,23 @@ def _fetch_with_safe_redirects(url: str, timeout: int) -> requests.Response:
             # 驗證當前 URL 的安全性
             _validate_url_security(current_url)
 
+            # stream=True：先不把 body 讀進記憶體，改由 _read_capped_body 設限讀取，
+            # 避免 requests 在此處就把（可能是解壓縮炸彈的）整包 body 載入。
             response = session.get(
                 current_url,
                 timeout=timeout,
                 allow_redirects=False,
+                stream=True,
             )
 
-            # 如果不是重定向，返回回應
+            # 如果不是重定向，設限讀取 body 後返回
             if response.status_code not in (301, 302, 303, 307, 308):
+                _read_capped_body(response)
                 return response
 
-            # 取得重定向目標
+            # 重定向：body 未讀，主動關閉釋放連線後再跳下一跳
             location = response.headers.get('Location')
+            response.close()
             if not location:
                 raise OGParserError('重定向缺少 Location header')
 

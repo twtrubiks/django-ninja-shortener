@@ -33,7 +33,7 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 * **個人儀表板**：分頁顯示用戶的所有短網址及其統計資料，支援連結刪除功能。
 * **連結數量限制**：每位登入用戶最多可建立 1000 個連結。
 * **RESTful API**：完整的 API 端點，使用 JWT 認證。
-* **安全防護**：SSRF 防護（解析實際 IP 後以 `ipaddress` 物件化檢查，涵蓋十進位 / hex / octal / IPv6-mapped 等編碼繞過，並對每個重定向目標重新驗證；DNS rebinding 列為已知限制）、URL 協議驗證、CSRF 保護、TOCTOU 競態條件防護。
+* **安全防護**：SSRF 防護（解析實際 IP 後以 `ipaddress` 物件化檢查，涵蓋十進位 / hex / octal / IPv6-mapped 等編碼繞過，並對每個重定向目標重新驗證；DNS rebinding 列為已知限制）、OG 抓取回應大小上限（串流讀取並對解壓後位元組設限，防解壓縮炸彈 / 超大 body 撐爆背景 worker）、URL 協議驗證、CSRF 保護、TOCTOU 競態條件防護。
 * **設定環境變數化**：`SECRET_KEY`、`DEBUG`、`ALLOWED_HOSTS`、資料庫帳密皆可由環境變數注入；生產環境（`DEBUG=False`）若仍沿用內建預設金鑰會直接拒絕啟動。詳見下方〈環境變數與生產環境設定〉一節。
 * **Docker 支援**：提供 Dockerfile 和 Docker Compose 設定，簡化開發與部署流程。
 
@@ -49,7 +49,7 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 * **QR Code**：使用 [Segno](https://segno.readthedocs.io/) 生成 QR Code
 * **OG 解析**：使用 [metadata_parser](https://github.com/jvanasco/metadata_parser) 解析 Open Graph 資料
 * **非同步任務**：使用 [Django-Q2](https://django-q2.readthedocs.io/) 背景處理 OG 抓取（以 PostgreSQL ORM 作為 broker，免額外的 Redis）
-* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)（118 個測試案例，94% 覆蓋率）
+* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)（133 個測試案例，94% 覆蓋率）
 * **容器化**：[Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 快速啟動 (使用 Docker, 建議用這個)
@@ -238,7 +238,7 @@ ninja_shortener/
 │   ├── services.py           # 共用業務邏輯（建立連結、OG 抓取與背景任務）
 │   ├── utils.py              # 短碼生成工具（Sqids）
 │   ├── validators.py         # 驗證器（URL、自訂 slug）
-│   ├── og_parser.py          # Open Graph 資料抓取（含 SSRF 防護）
+│   ├── og_parser.py          # Open Graph 資料抓取（含 SSRF 防護、回應大小上限）
 │   ├── qr_utils.py           # QR Code 生成工具
 │   └── tests/                # 測試套件
 │       ├── conftest.py       # pytest fixtures 集中管理
