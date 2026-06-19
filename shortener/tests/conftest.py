@@ -35,6 +35,25 @@ def client():
 
 
 @pytest.fixture(autouse=True)
+def local_memory_cache(settings):
+    """
+    測試一律改用記憶體快取後端，並在每個測試前後清空。
+
+    正式環境用 DatabaseCache（需 `createcachetable` 建表），但 pytest 的測試資料庫
+    不含該表；且 API throttling 的請求計數存於快取，需在測試間清空以確保彼此隔離
+    （避免前一個測試累積的計數讓後續測試誤觸 429）。
+    """
+    settings.CACHES = {
+        'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'},
+    }
+    from django.core.cache import cache
+
+    cache.clear()
+    yield
+    cache.clear()
+
+
+@pytest.fixture(autouse=True)
 def reset_ninja_registry():
     """
     自動運行的 fixture，清除 Ninja 的內部註冊表以防止 ConfigError。

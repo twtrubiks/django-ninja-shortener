@@ -33,7 +33,7 @@ With registration, you get more features like click tracking, expiration dates, 
 * **Personal Dashboard**: Paginated display of all user's short URLs and statistics, with link deletion support.
 * **Link Limit**: Each logged-in user can create up to 1000 links.
 * **RESTful API**: Complete API endpoints with JWT authentication.
-* **Security Protection**: SSRF protection (resolves the actual IP and performs object-level checks via `ipaddress`, covering decimal / hex / octal / IPv6-mapped encoding bypasses, and re-validates every redirect target; DNS rebinding is a known limitation), OG fetch response size limit (streamed read that caps decompressed bytes to guard against decompression bombs / oversized bodies exhausting the background worker), URL protocol validation, CSRF protection, TOCTOU race condition prevention, production HTTPS hardening (HSTS, HTTPS redirect, and `Secure` cookies auto-enabled when `DEBUG=False`).
+* **Security Protection**: SSRF protection (resolves the actual IP and performs object-level checks via `ipaddress`, covering decimal / hex / octal / IPv6-mapped encoding bypasses, and re-validates every redirect target; DNS rebinding is a known limitation), OG fetch response size limit (streamed read that caps decompressed bytes to guard against decompression bombs / oversized bodies exhausting the background worker), URL protocol validation, CSRF protection, TOCTOU race condition prevention, production HTTPS hardening (HSTS, HTTPS redirect, and `Secure` cookies auto-enabled when `DEBUG=False`), API rate limiting (throttling to prevent abuse / DoS).
 * **Environment-based Configuration**: `SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, and database credentials can all be injected via environment variables; in production (`DEBUG=False`) the app refuses to start if the built-in default key is still in use. See the "Environment Variables & Production Setup" section below.
 * **Docker Support**: Includes Dockerfile and Docker Compose setup to simplify development and deployment.
 
@@ -172,6 +172,8 @@ cp .env.example .env   # then adjust .env for your environment
 | `DJANGO_SECURE_SSL_REDIRECT` | (when `DEBUG=False`) Redirect HTTP to HTTPS | `True` |
 | `DJANGO_SECURE_HSTS_SECONDS` | (when `DEBUG=False`) HSTS max-age in seconds | `31536000` |
 | `DJANGO_TRUST_PROXY_SSL_HEADER` | (when `DEBUG=False`) Trust reverse-proxy `X-Forwarded-Proto` to detect HTTPS | `False` |
+| `DJANGO_ANON_THROTTLE_RATE` | Rate limit for public API endpoints (per IP, format "count/period") | `30/min` |
+| `DJANGO_USER_THROTTLE_RATE` | Rate limit for authenticated API endpoints (per user) | `60/min` |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Database name / user / password | `postgres` / `myuser` / `password123` |
 | `POSTGRES_HOST` / `POSTGRES_PORT` | Database host / port | `django-postgres` / `5432` |
 
@@ -209,6 +211,8 @@ The testing plan can be found in [TESTING_PLAN.md](TESTING_PLAN.md).
 ## 📄 API Endpoints
 
 The API provides a programmatic way to interact with the URL shortener service. All API endpoints are under the `/api/` path.
+
+> All API endpoints are rate-limited (throttled): the public QR endpoint is throttled per source IP, authenticated endpoints per user, and exceeding the limit returns `429 Too Many Requests`. Rates are configurable via `DJANGO_ANON_THROTTLE_RATE` / `DJANGO_USER_THROTTLE_RATE`.
 
 For the best experience, please visit the **API Documentation (Swagger UI)** at [http://localhost:8000/api/docs](http://localhost:8000/api/docs).
 
@@ -266,8 +270,8 @@ ninja_shortener/
 * **Custom Short URLs**: Allow users to customize the short code for their URLs. ✅ Completed
 * **QR Code Generation**: Generate a QR code for each short URL. ✅ Completed
 * **Asynchronous OG Fetching**: Make Open Graph data fetching asynchronous (Django-Q2, with PostgreSQL as the broker) to avoid blocking API requests. ✅ Completed
-* **Caching Layer**: Use Redis to cache popular links and OG preview data.
-* **API Rate Limiting**: Implement rate limiting to prevent abuse.
+* **API Rate Limiting**: Prevent abuse via django-ninja's built-in throttling — public endpoints throttled by IP, authenticated endpoints by user; counters stored in DatabaseCache by default (no extra service), with rates configurable via environment variables. ✅ Completed
+* **Caching Layer**: Move throttling counters and popular link / OG preview data to Redis for better performance and cross-process consistency.
 
 ## Donation
 

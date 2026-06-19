@@ -6,6 +6,7 @@ from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from ninja import Query, Router, Schema, Status
+from ninja.throttling import AnonRateThrottle, AuthRateThrottle
 from ninja_jwt.authentication import JWTAuth
 from pydantic import HttpUrl, field_validator
 
@@ -20,6 +21,13 @@ from .services import (
 from .validators import validate_custom_slug
 
 router = Router(tags=['shorteners'])
+
+
+# API 流量限制（計數存於 Django cache，見 settings.CACHES）
+# - 公開端點（QR）：AnonRateThrottle 只作用於未認證請求，按來源 IP 計數
+# - 已認證端點：AuthRateThrottle 以 request.auth（JWT 使用者）為 key，按使用者計數
+_anon_throttle = AnonRateThrottle(getattr(settings, 'ANON_THROTTLE_RATE', '30/min'))
+_user_throttle = AuthRateThrottle(getattr(settings, 'USER_THROTTLE_RATE', '60/min'))
 
 
 # ========== Input Schemas ==========
@@ -156,6 +164,7 @@ def _link_to_response(link: Link) -> dict:
     '/shorten',
     response={200: LinkWithPreviewSchema, 403: LinkLimitExceededSchema, 409: ErrorSchema, 500: ErrorSchema},
     auth=JWTAuth(),
+    throttle=[_user_throttle],
 )
 def shorten_url(request, payload: ShortenRequest):
     """
@@ -205,6 +214,7 @@ def shorten_url(request, payload: ShortenRequest):
     '/links/{short_code}/refresh-preview',
     response=LinkWithPreviewSchema,
     auth=JWTAuth(),
+    throttle=[_user_throttle],
 )
 def refresh_link_preview(request, short_code: str):
     """
@@ -231,6 +241,7 @@ def refresh_link_preview(request, short_code: str):
     '/links/{short_code}',
     response=LinkWithPreviewSchema,
     auth=JWTAuth(),
+    throttle=[_user_throttle],
 )
 def get_link_detail(request, short_code: str):
     """
@@ -250,7 +261,7 @@ def get_link_detail(request, short_code: str):
     return _link_to_response(link)
 
 
-@router.get('/links/{short_code}/qr')
+@router.get('/links/{short_code}/qr', throttle=[_anon_throttle])
 def get_qr_code(request, short_code: str, params: QRCodeParams = Query(...)):
     """
     生成短網址的 QR Code
@@ -275,7 +286,12 @@ def get_qr_code(request, short_code: str, params: QRCodeParams = Query(...)):
     return HttpResponse(buffer, content_type='image/png')
 
 
-@router.get('/check-slug/{slug}', response=SlugAvailabilityResponse, auth=JWTAuth())
+@router.get(
+    '/check-slug/{slug}',
+    response=SlugAvailabilityResponse,
+    auth=JWTAuth(),
+    throttle=[_user_throttle],
+)
 def check_slug_availability(request, slug: str):
     """
     即時檢查 slug 是否可用
@@ -312,6 +328,7 @@ def check_slug_availability(request, slug: str):
     '/links/{short_code}',
     response={200: dict, 403: ErrorSchema, 404: ErrorSchema},
     auth=JWTAuth(),
+    throttle=[_user_throttle],
 )
 def delete_link(request, short_code: str):
     """

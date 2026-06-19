@@ -33,7 +33,7 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 * **個人儀表板**：分頁顯示用戶的所有短網址及其統計資料，支援連結刪除功能。
 * **連結數量限制**：每位登入用戶最多可建立 1000 個連結。
 * **RESTful API**：完整的 API 端點，使用 JWT 認證。
-* **安全防護**：SSRF 防護（解析實際 IP 後以 `ipaddress` 物件化檢查，涵蓋十進位 / hex / octal / IPv6-mapped 等編碼繞過，並對每個重定向目標重新驗證；DNS rebinding 列為已知限制）、OG 抓取回應大小上限（串流讀取並對解壓後位元組設限，防解壓縮炸彈 / 超大 body 撐爆背景 worker）、URL 協議驗證、CSRF 保護、TOCTOU 競態條件防護、生產環境 HTTPS 強化（`DEBUG=False` 時自動啟用 HSTS、HTTPS 轉址與 `Secure` cookie）。
+* **安全防護**：SSRF 防護（解析實際 IP 後以 `ipaddress` 物件化檢查，涵蓋十進位 / hex / octal / IPv6-mapped 等編碼繞過，並對每個重定向目標重新驗證；DNS rebinding 列為已知限制）、OG 抓取回應大小上限（串流讀取並對解壓後位元組設限，防解壓縮炸彈 / 超大 body 撐爆背景 worker）、URL 協議驗證、CSRF 保護、TOCTOU 競態條件防護、生產環境 HTTPS 強化（`DEBUG=False` 時自動啟用 HSTS、HTTPS 轉址與 `Secure` cookie）、API 流量限制（throttling，防濫用 / DoS）。
 * **設定環境變數化**：`SECRET_KEY`、`DEBUG`、`ALLOWED_HOSTS`、資料庫帳密皆可由環境變數注入；生產環境（`DEBUG=False`）若仍沿用內建預設金鑰會直接拒絕啟動。詳見下方〈環境變數與生產環境設定〉一節。
 * **Docker 支援**：提供 Dockerfile 和 Docker Compose 設定，簡化開發與部署流程。
 
@@ -172,6 +172,8 @@ cp .env.example .env   # 之後依環境調整 .env 內容
 | `DJANGO_SECURE_SSL_REDIRECT` | （`DEBUG=False` 時）HTTP 自動轉址 HTTPS | `True` |
 | `DJANGO_SECURE_HSTS_SECONDS` | （`DEBUG=False` 時）HSTS 有效秒數 | `31536000` |
 | `DJANGO_TRUST_PROXY_SSL_HEADER` | （`DEBUG=False` 時）信任反向代理 `X-Forwarded-Proto` 辨識 HTTPS | `False` |
+| `DJANGO_ANON_THROTTLE_RATE` | 公開 API 端點流量上限（按 IP，格式「次數/週期」） | `30/min` |
+| `DJANGO_USER_THROTTLE_RATE` | 已認證 API 端點流量上限（按使用者） | `60/min` |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | 資料庫名稱 / 帳號 / 密碼 | `postgres` / `myuser` / `password123` |
 | `POSTGRES_HOST` / `POSTGRES_PORT` | 資料庫位址 / 連接埠 | `django-postgres` / `5432` |
 
@@ -209,6 +211,8 @@ cp .env.example .env   # 之後依環境調整 .env 內容
 ## 📄 API 端點
 
 API 提供了程式化的方式來與短網址服務互動。所有 API 端點都在 `/api/` 路徑下。
+
+> 所有 API 端點皆套用流量限制（throttling）：公開的 QR 端點按來源 IP、已認證端點按使用者計數，超出上限回應 `429 Too Many Requests`。速率可由 `DJANGO_ANON_THROTTLE_RATE` / `DJANGO_USER_THROTTLE_RATE` 調整。
 
 建議直接到 **API 文件 (Swagger UI)**：[http://localhost:8000/api/docs](http://localhost:8000/api/docs)
 
@@ -266,8 +270,8 @@ ninja_shortener/
 * **自訂短網址**：允許使用者自訂短網址的代碼。✅ 已完成
 * **QR Code 產生**：為每個短網址產生對應的 QR Code。✅ 已完成
 * **OG 抓取異步化**：將 Open Graph 資料抓取改為異步處理（Django-Q2，以 PostgreSQL 為 broker），避免阻塞 API 請求。✅ 已完成
-* **快取層**：使用 Redis 快取熱門連結和 OG 預覽資料。
-* **API 速率限制**：實作 rate limiting 防止濫用。
+* **API 速率限制**：以 django-ninja 內建 throttling 防止濫用，公開端點按 IP、已認證端點按使用者；計數預設存於 DatabaseCache（免額外服務），速率可由環境變數調整。✅ 已完成
+* **快取層**：將 throttling 計數與熱門連結 / OG 預覽資料改用 Redis 快取，獲得更佳效能與多程序間一致性。
 
 ## Donation
 

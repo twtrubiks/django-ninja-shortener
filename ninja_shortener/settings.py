@@ -297,3 +297,11 @@ RESERVED_SLUGS = frozenset({
 
 # 每位用戶最多可建立的連結數量
 USER_MAX_LINKS = 1000
+
+
+# API 流量限制（django-ninja 內建 throttling，請求計數存於上方 CACHES）
+# 公開端點（QR）按來源 IP；已認證端點按使用者。
+# 格式為「次數/週期」，週期支援 s(sec) / m(min) / h(hour) / d(day)。
+# 可由環境變數覆蓋，以因應不同部署規模。
+ANON_THROTTLE_RATE = os.environ.get('DJANGO_ANON_THROTTLE_RATE', '30/min')
+USER_THROTTLE_RATE = os.environ.get('DJANGO_USER_THROTTLE_RATE', '60/min')
