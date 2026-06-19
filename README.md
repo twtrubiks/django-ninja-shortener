@@ -88,7 +88,7 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 
 **先決條件：**
 
-* Python 3.12
+* Python 3.13
 * Node.js and npm (用於 Tailwind CSS)
 
 **設定步驟：**

@@ -5,7 +5,7 @@ from typing import Optional
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
-from ninja import ModelSchema, Query, Router, Schema
+from ninja import ModelSchema, Query, Router, Schema, Status
 from ninja_jwt.authentication import JWTAuth
 from pydantic import HttpUrl, field_validator
 
@@ -182,11 +182,11 @@ def shorten_url(request, payload: ShortenRequest):
     current_count = Link.objects.filter(owner=owner).count()
 
     if current_count >= max_links:
-        return 403, {
+        return Status(403, {
             'detail': f'您已達到連結上限（{max_links} 個），請刪除部分連結後再試',
             'current_count': current_count,
             'max_links': max_links,
-        }
+        })
 
     try:
         link = create_short_link(
@@ -196,9 +196,9 @@ def shorten_url(request, payload: ShortenRequest):
             expires_at=payload.expires_at,
         )
     except SlugAlreadyExistsError as e:
-        return 409, {'detail': f'網址「{e.slug}」已被使用，請選擇其他名稱'}
+        return Status(409, {'detail': f'網址「{e.slug}」已被使用，請選擇其他名稱'})
     except ShortCodeGenerationError:
-        return 500, {'detail': '系統發生錯誤，請稍後再試'}
+        return Status(500, {'detail': '系統發生錯誤，請稍後再試'})
 
     # OG 抓取改為 Django-Q 背景任務，建立後立即回應，不被目標網站拖慢
     enqueue_preview_fetch(link)
@@ -206,7 +206,7 @@ def shorten_url(request, payload: ShortenRequest):
     # 重新載入以取得 preview 關聯（此時通常為 pending，由背景 worker 後續填入）
     link.refresh_from_db()
 
-    return 200, _link_to_response(link)
+    return Status(200, _link_to_response(link))
 
 
 @router.post(
@@ -335,4 +335,4 @@ def delete_link(request, short_code: str):
         return JsonResponse({'detail': '您沒有權限刪除此連結'}, status=403)
 
     link.delete()
-    return 200, {'detail': '連結已成功刪除', 'short_code': short_code}
+    return Status(200, {'detail': '連結已成功刪除', 'short_code': short_code})

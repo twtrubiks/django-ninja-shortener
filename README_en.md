@@ -88,7 +88,7 @@ If you prefer to set up the environment directly on your local machine.
 
 **Prerequisites:**
 
-* Python 3.12
+* Python 3.13
 * Node.js and npm (for Tailwind CSS)
 
 **Setup Steps:**
