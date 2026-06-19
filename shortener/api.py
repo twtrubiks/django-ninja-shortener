@@ -5,7 +5,7 @@ from typing import Optional
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
-from ninja import ModelSchema, Query, Router, Schema, Status
+from ninja import Query, Router, Schema, Status
 from ninja_jwt.authentication import JWTAuth
 from pydantic import HttpUrl, field_validator
 
@@ -77,14 +77,6 @@ class LinkPreviewSchema(Schema):
 
     class Config:
         from_attributes = True
-
-
-class LinkSchema(ModelSchema):
-    """Link 輸出 Schema（不含預覽）"""
-
-    class Meta:
-        model = Link
-        exclude = ['id']
 
 
 class LinkWithPreviewSchema(Schema):
