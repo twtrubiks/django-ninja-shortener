@@ -186,7 +186,7 @@ Q_CLUSTER = {
 # django-ninja 內建 throttling 的請求計數即存放於此（見 shortener/api.py）。
 # 預設用 DatabaseCache（沿用既有 Postgres，免額外服務即可上線）；正式環境若已備
 # Redis，改用 RedisCache 可獲得更佳效能與多程序（gunicorn worker）間的一致計數。
-# 對應的快取資料表由 `python manage.py createcachetable` 建立（entrypoint.sh 已含）。
+# 對應的快取資料表由 `python manage.py createcachetable` 建立（一次性 migrate 服務已含）。
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
@@ -233,7 +233,26 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
+# collectstatic 的輸出目錄（生產環境由前層代理 / Caddy 直接服務此目錄）。
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# 靜態檔儲存後端。
+# 開發（DEBUG=True）：用 Django 預設 StaticFilesStorage，runserver 直接以 finders 服務，
+#   不需先跑 collectstatic，模板 `{% static %}` 也不依賴 manifest。
+# 生產（DEBUG=False）：改用 ManifestStaticFilesStorage，collectstatic 會產生帶內容雜湊的
+#   檔名（cache busting），讓前層可長期快取又能在內容變更時自動失效。
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    },
+}
+if not DEBUG:
+    STORAGES['staticfiles']['BACKEND'] = (
+        'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
+    )
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

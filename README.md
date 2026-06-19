@@ -174,6 +174,8 @@ cp .env.example .env   # 之後依環境調整 .env 內容
 | `DJANGO_TRUST_PROXY_SSL_HEADER` | （`DEBUG=False` 時）信任反向代理 `X-Forwarded-Proto` 辨識 HTTPS | `False` |
 | `DJANGO_ANON_THROTTLE_RATE` | 公開 API 端點流量上限（按 IP，格式「次數/週期」） | `30/min` |
 | `DJANGO_USER_THROTTLE_RATE` | 已認證 API 端點流量上限（按使用者） | `60/min` |
+| `SITE_ADDRESS` | （`docker-compose.prod.yml`）Caddy 對外位址，設網域即啟用自動 HTTPS | `:80` |
+| `WEB_CONCURRENCY` | （`docker-compose.prod.yml`）gunicorn worker 數量 | `3` |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | 資料庫名稱 / 帳號 / 密碼 | `postgres` / `myuser` / `password123` |
 | `POSTGRES_HOST` / `POSTGRES_PORT` | 資料庫位址 / 連接埠 | `django-postgres` / `5432` |
 
@@ -184,6 +186,38 @@ cp .env.example .env   # 之後依環境調整 .env 內容
 * 將 `DJANGO_ALLOWED_HOSTS` 設為實際網域（例如 `example.com,www.example.com`）。
 * 使用強資料庫密碼，且不要將實際的 `.env` 提交進版控（`.gitignore` 已忽略 `.env`，僅保留 `.env.example`）。
 * **HTTPS 站台**：維持 `DJANGO_DEBUG=False` 即會自動啟用 HSTS、`SECURE_SSL_REDIRECT`、以及 session / CSRF 的 `Secure` cookie。若 TLS 由 nginx / Cloudflare 終結，依情況調整 `DJANGO_SECURE_SSL_REDIRECT` 與 `DJANGO_TRUST_PROXY_SSL_HEADER`。最後以 `python manage.py check --deploy` 驗收。
+
+## 🚢 生產環境部署 (gunicorn + Caddy)
+
+開發用的 `docker compose up` 採 `runserver`（含熱重載），方便開發但**不適合上線**。正式部署請改用 `docker-compose.prod.yml`，它以生產級組態啟動：
+
+* **gunicorn**（WSGI）取代 `runserver`。
+* **Caddy** 作為前層：自動 HTTPS（Let's Encrypt）、反向代理至 gunicorn、並直接服務靜態檔。
+* `migrate` / `createcachetable` / `collectstatic` 由專屬的**一次性 `migrate` 服務**集中執行一次；web / qcluster 以 `depends_on: service_completed_successfully` 等它跑完才啟動，從結構上避免多容器開機各自 `migrate` 的並發競態。
+* 靜態檔以 `ManifestStaticFilesStorage` 產生帶內容雜湊的檔名（cache busting），交由 Caddy 長期快取。
+* Tailwind CSS 於映像建置階段預先 build，生產映像自帶靜態資產。
+
+啟動步驟：
+
+```bash
+cp .env.example .env
+# 編輯 .env，務必設定（不可沿用開發預設值）：
+#   DJANGO_SECRET_KEY=<隨機長字串>
+#   DJANGO_DEBUG=False
+#   DJANGO_ALLOWED_HOSTS=example.com,www.example.com
+#   SITE_ADDRESS=example.com        # Caddy 自動申請 / 續期 TLS（需 80/443 對外、DNS 指向本機）
+#   POSTGRES_PASSWORD=<強密碼>
+
+docker compose -p ninja-prod -f docker-compose.prod.yml up -d --build
+```
+
+* **`-p ninja-prod` 是專案名稱**（`--project-name`），會當前綴套在容器 / 網路 / 資料卷上（如 `ninja-prod_db-data`）。不帶 `-p` 時專案名預設為**目錄名**，會與開發用 `docker compose up` 共用同一個 `db-data` 資料卷而互相污染（例如 Postgres 密碼以先啟動者為準，導致另一套認證失敗）。用 `-p ninja-prod` 讓生產與開發資料卷**完全分家**。
+  * ⚠️ 用了 `-p ninja-prod` 後，**之後每一條 prod 指令都要帶**（`down` / `logs` / `ps` / `exec` …），否則會操作到另一個專案。
+* **本機冒煙測試**（不申請憑證）：保留 `SITE_ADDRESS=:80`，以純 HTTP 連 `http://localhost`。
+* `WEB_CONCURRENCY` 調整 gunicorn worker 數（建議 `2 * CPU + 1`）。
+* TLS 由 Caddy 終結後以 HTTP 回源，故生產預設 `DJANGO_SECURE_SSL_REDIRECT=False`（http→https 轉址交給 Caddy，避免迴圈）、`DJANGO_TRUST_PROXY_SSL_HEADER=True`（信任 Caddy 帶上的 `X-Forwarded-Proto`）。
+* 驗收：`docker compose -p ninja-prod -f docker-compose.prod.yml exec web python manage.py check --deploy`。
+* 若想改用 nginx 等其他前層，或讓 Django 自行服務靜態檔（無前層），可改以 WhiteNoise 服務 `/static/`。
 
 ## 🧪 運行測試
 
@@ -231,7 +265,10 @@ API 提供了程式化的方式來與短網址服務互動。所有 API 端點�
 ```cmd
 ninja_shortener/
 ├── Dockerfile
-├── docker-compose.yml
+├── docker-compose.yml        # 開發用（runserver + 熱重載）
+├── docker-compose.prod.yml   # 生產用（gunicorn + Caddy）
+├── Caddyfile                 # Caddy 前層設定（自動 HTTPS / 反向代理 / 靜態檔）
+├── entrypoint.sh             # 開機：migrate（+ 生產時 collectstatic）
 ├── manage.py
 ├── requirements.txt
 ├── pytest.ini                # Pytest 設定
@@ -271,6 +308,7 @@ ninja_shortener/
 * **QR Code 產生**：為每個短網址產生對應的 QR Code。✅ 已完成
 * **OG 抓取異步化**：將 Open Graph 資料抓取改為異步處理（Django-Q2，以 PostgreSQL 為 broker），避免阻塞 API 請求。✅ 已完成
 * **API 速率限制**：以 django-ninja 內建 throttling 防止濫用，公開端點按 IP、已認證端點按使用者；計數預設存於 DatabaseCache（免額外服務），速率可由環境變數調整。✅ 已完成
+* **生產環境部署**：以 gunicorn 取代 runserver、Caddy 前層（自動 HTTPS + 反向代理 + 服務靜態檔）、移除開機 `makemigrations`、`DEBUG=False` 時自動 `collectstatic`；見 `docker-compose.prod.yml`。✅ 已完成
 * **快取層**：將 throttling 計數與熱門連結 / OG 預覽資料改用 Redis 快取，獲得更佳效能與多程序間一致性。
 
 ## Donation

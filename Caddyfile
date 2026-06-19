@@ -1,0 +1,20 @@
+# Caddy 設定 —— 自動 HTTPS（Let's Encrypt）+ 反向代理至 gunicorn + 直接服務靜態檔。
+# 供 docker-compose.prod.yml 使用，SITE_ADDRESS 由該檔以環境變數注入：
+#   - 設為網域（如 example.com）→ Caddy 自動申請並續期 TLS 憑證
+#   - 預設 :80 → 純 HTTP，僅供本機冒煙測試
+{$SITE_ADDRESS} {
+	# 回應壓縮（zstd 優先，退回 gzip）。
+	encode zstd gzip
+
+	# 靜態檔由 Caddy 直接服務（collectstatic 產物，位於共用的 static-data volume）。
+	# 檔名帶內容雜湊（ManifestStaticFilesStorage），可安全地長期快取。
+	handle_path /static/* {
+		root * /srv/staticfiles
+		file_server
+		header Cache-Control "public, max-age=31536000"
+	}
+
+	# 其餘請求反向代理至 gunicorn。Caddy 會自動帶上 X-Forwarded-Proto / -For / -Host，
+	# 搭配 Django 的 DJANGO_TRUST_PROXY_SSL_HEADER=True 即可正確辨識 HTTPS。
+	reverse_proxy web:8000
+}

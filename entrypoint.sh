@@ -3,22 +3,11 @@
 # 如果任何指令失敗，立即退出
 set -e
 
-# 只套用已存在的 migration；不在開機產生（makemigrations 應在開發時執行並提交進版控，
-# 開機才產生會讓正式環境的 schema 取決於當下程式碼，且 migration 不進版控、難以追蹤回溯）。
-echo 'Run migration'
-python manage.py migrate
-
-# 建立 DatabaseCache 用的快取資料表（throttling 計數存放處；可重複執行不影響既有表）
-echo 'Create cache table'
-python manage.py createcachetable
-
-# echo 'Create Super User'
-# python3 manage.py createsuperuser --noinput || echo "Super user already created"
-# echo 'Collect Static'
-# python3 manage.py collectstatic --noinput
-
-# 執行傳遞給此腳本的任何指令
-# "$@" 會獲取 Docker CMD 或 docker-compose command 中的指令
+# entrypoint 只負責執行傳入的指令，本身不碰任何會變更狀態的釋出步驟。
+#
+# migrate / createcachetable / collectstatic 這類「變更 DB schema 或寫入共用靜態檔」
+# 的動作，一律交給專屬的一次性 `migrate` 服務集中執行一次（見 docker-compose*.yml）。
+# 長駐服務（web / qcluster）改以 depends_on: service_completed_successfully 等它跑完，
+# 因此這些容器的啟動路徑裡「沒有」migrate —— 從結構上杜絕了多個容器開機各自 migrate
+# 造成的並發競態（relation already exists），而非靠旗標壓制。
 exec "$@"
-
-

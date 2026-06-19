@@ -174,6 +174,8 @@ cp .env.example .env   # then adjust .env for your environment
 | `DJANGO_TRUST_PROXY_SSL_HEADER` | (when `DEBUG=False`) Trust reverse-proxy `X-Forwarded-Proto` to detect HTTPS | `False` |
 | `DJANGO_ANON_THROTTLE_RATE` | Rate limit for public API endpoints (per IP, format "count/period") | `30/min` |
 | `DJANGO_USER_THROTTLE_RATE` | Rate limit for authenticated API endpoints (per user) | `60/min` |
+| `SITE_ADDRESS` | (`docker-compose.prod.yml`) Caddy's public address; set a domain to enable automatic HTTPS | `:80` |
+| `WEB_CONCURRENCY` | (`docker-compose.prod.yml`) Number of gunicorn workers | `3` |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Database name / user / password | `postgres` / `myuser` / `password123` |
 | `POSTGRES_HOST` / `POSTGRES_PORT` | Database host / port | `django-postgres` / `5432` |
 
@@ -184,6 +186,38 @@ cp .env.example .env   # then adjust .env for your environment
 * Set `DJANGO_ALLOWED_HOSTS` to your real domains (e.g. `example.com,www.example.com`).
 * Use a strong database password, and never commit your actual `.env` (it is already ignored by `.gitignore`; only `.env.example` is tracked).
 * **HTTPS sites**: keeping `DJANGO_DEBUG=False` automatically enables HSTS, `SECURE_SSL_REDIRECT`, and `Secure` cookies for sessions / CSRF. If TLS is terminated by nginx / Cloudflare, adjust `DJANGO_SECURE_SSL_REDIRECT` and `DJANGO_TRUST_PROXY_SSL_HEADER` accordingly. Verify with `python manage.py check --deploy`.
+
+## 🚢 Production Deployment (gunicorn + Caddy)
+
+The development `docker compose up` uses `runserver` (with hot reload) — convenient for development but **not suitable for production**. For real deployments use `docker-compose.prod.yml`, which boots a production-grade stack:
+
+* **gunicorn** (WSGI) instead of `runserver`.
+* **Caddy** as the front layer: automatic HTTPS (Let's Encrypt), reverse proxy to gunicorn, and serving static files directly.
+* `migrate` / `createcachetable` / `collectstatic` run once in a dedicated **one-shot `migrate` service**; web / qcluster start only after it finishes (`depends_on: service_completed_successfully`), structurally preventing the concurrent-`migrate` race of multiple containers each migrating on boot.
+* Static files use `ManifestStaticFilesStorage` for content-hashed filenames (cache busting), served by Caddy with long-lived caching.
+* Tailwind CSS is pre-built during the image build, so the production image ships with its static assets.
+
+Steps:
+
+```bash
+cp .env.example .env
+# Edit .env and be sure to set (do not reuse the dev defaults):
+#   DJANGO_SECRET_KEY=<long random string>
+#   DJANGO_DEBUG=False
+#   DJANGO_ALLOWED_HOSTS=example.com,www.example.com
+#   SITE_ADDRESS=example.com        # Caddy auto-obtains/renews TLS (needs 80/443 exposed, DNS pointing here)
+#   POSTGRES_PASSWORD=<strong password>
+
+docker compose -p ninja-prod -f docker-compose.prod.yml up -d --build
+```
+
+* **`-p ninja-prod` is the project name** (`--project-name`), used as a prefix for containers / networks / volumes (e.g. `ninja-prod_db-data`). Without `-p`, the project name defaults to the **directory name**, which shares the same `db-data` volume as the development `docker compose up` and causes cross-contamination (e.g. the Postgres password is fixed by whichever stack starts first, making the other fail authentication). `-p ninja-prod` keeps the production and development volumes **fully separate**.
+  * ⚠️ Once you use `-p ninja-prod`, **every subsequent prod command must include it** (`down` / `logs` / `ps` / `exec` …), otherwise you'll act on a different project.
+* **Local smoke test** (no certificate): keep `SITE_ADDRESS=:80` and use plain HTTP at `http://localhost`.
+* `WEB_CONCURRENCY` tunes the number of gunicorn workers (recommended `2 * CPU + 1`).
+* Since TLS is terminated at Caddy and proxied over HTTP, production defaults to `DJANGO_SECURE_SSL_REDIRECT=False` (http→https redirect handled by Caddy to avoid loops) and `DJANGO_TRUST_PROXY_SSL_HEADER=True` (trust Caddy's `X-Forwarded-Proto`).
+* Verify with `docker compose -p ninja-prod -f docker-compose.prod.yml exec web python manage.py check --deploy`.
+* To use a different front layer (e.g. nginx), or to have Django serve static files itself (no front layer), you can serve `/static/` via WhiteNoise instead.
 
 ## 🧪 Running Tests
 
@@ -231,7 +265,10 @@ Then, paste the token into the top right corner to authorize your API calls.
 ```cmd
 ninja_shortener/
 ├── Dockerfile
-├── docker-compose.yml
+├── docker-compose.yml        # Development (runserver + hot reload)
+├── docker-compose.prod.yml   # Production (gunicorn + Caddy)
+├── Caddyfile                 # Caddy front layer (auto HTTPS / reverse proxy / static)
+├── entrypoint.sh             # Boot: migrate (+ collectstatic in production)
 ├── manage.py
 ├── requirements.txt
 ├── pytest.ini                # Pytest configuration
@@ -271,6 +308,7 @@ ninja_shortener/
 * **QR Code Generation**: Generate a QR code for each short URL. ✅ Completed
 * **Asynchronous OG Fetching**: Make Open Graph data fetching asynchronous (Django-Q2, with PostgreSQL as the broker) to avoid blocking API requests. ✅ Completed
 * **API Rate Limiting**: Prevent abuse via django-ninja's built-in throttling — public endpoints throttled by IP, authenticated endpoints by user; counters stored in DatabaseCache by default (no extra service), with rates configurable via environment variables. ✅ Completed
+* **Production Deployment**: gunicorn instead of runserver, a Caddy front layer (auto HTTPS + reverse proxy + static serving), removal of boot-time `makemigrations`, and automatic `collectstatic` when `DEBUG=False`; see `docker-compose.prod.yml`. ✅ Completed
 * **Caching Layer**: Move throttling counters and popular link / OG preview data to Redis for better performance and cross-process consistency.
 
 ## Donation

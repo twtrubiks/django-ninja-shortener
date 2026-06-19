@@ -31,6 +31,10 @@ ENV PATH="/root/.local/bin/:$PATH"
 # Use uv to install packages
 RUN uv pip install --no-cache --system -r requirements.txt
 
+# 預先建置 Tailwind CSS，讓生產映像自帶靜態資產（開機由 collectstatic 收集）。
+# 開發環境以 volume 掛載原始碼，會由 tailwind 服務即時重建覆蓋，不受此層影響。
+RUN python manage.py tailwind install && python manage.py tailwind build
+
 # for entry point
 RUN chmod +x /ninja_shortener/entrypoint.sh
 

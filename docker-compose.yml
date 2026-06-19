@@ -29,6 +29,20 @@ services:
       profiles:
         - "testing"
 
+    migrate:
+      # 一次性「釋出」容器：集中跑 migrate（+ 建快取表），跑完即退出。
+      # django-ninja / qcluster 以 service_completed_successfully 等它完成，
+      # 與 prod 對等，避免多個容器開機各自 migrate 的並發競態。
+      # dev 用 runserver + staticfiles finders 服務靜態檔，故不需 collectstatic。
+      <<: *x-base-app
+      command: >
+        bash -c "python manage.py migrate &&
+                 python manage.py createcachetable"
+      restart: "no"
+      depends_on:
+        django-postgres:
+          condition: service_started
+
     django-ninja:
       <<: *x-base-app
       command: bash -c "python manage.py runserver 0.0.0.0:8000"
@@ -44,6 +58,10 @@ services:
         django-postgres:
           condition: service_started
 
+        # 等 migrate 一次性服務跑完，schema 就緒後才啟動
+        migrate:
+          condition: service_completed_successfully
+
     qcluster:
       # Django-Q2 背景 worker：處理 OG 抓取等非同步任務
       <<: *x-base-app
@@ -52,6 +70,8 @@ services:
       depends_on:
         django-postgres:
           condition: service_started
+        migrate:
+          condition: service_completed_successfully
 
     django-postgres:
       image: postgres:18

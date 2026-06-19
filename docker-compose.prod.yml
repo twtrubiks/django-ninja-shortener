@@ -1,0 +1,130 @@
+# 生產環境部署 —— gunicorn (WSGI) + Caddy 前層（自動 HTTPS、反向代理、服務靜態檔）
+#
+# 啟動方式：
+#   1. cp .env.example .env，並務必設定（不可沿用開發預設值）：
+#        DJANGO_SECRET_KEY    隨機長字串（同時用於 JWT 簽章）
+#        DJANGO_DEBUG=False
+#        DJANGO_ALLOWED_HOSTS 你的網域，例如 example.com,www.example.com
+#        SITE_ADDRESS         你的網域（Caddy 會自動申請 / 續期 Let's Encrypt 憑證）
+#        POSTGRES_PASSWORD    強密碼
+#   2. docker compose -p ninja-prod -f docker-compose.prod.yml up -d --build
+#      （-p ninja-prod 為專案名稱，讓生產容器 / 網路 / 資料卷與開發環境完全隔離，
+#        避免同目錄下與 docker compose up 共用 db-data 而互相污染；之後每條 prod
+#        指令都要帶 -p ninja-prod）
+#
+# 與開發用 docker-compose.yml 的差異：
+#   - web 服務以 gunicorn 取代 runserver（runserver 僅供開發，效能與安全性皆不足上線）
+#   - 不掛載原始碼 volume：使用映像內已建置好的程式碼與 Tailwind 靜態資產
+#   - migrate / collectstatic 由一次性 migrate 服務集中執行；prod 額外跑 collectstatic
+#     並輸出到 static-data volume（dev 用 runserver + finders，免收集）
+#   - 由 Caddy 直接服務 /static/（從 static-data volume），gunicorn 只處理動態請求
+#   - 不含 tailwind watcher / browser-reload 等開發專用服務
+
+x-base-app-setting: &x-base-app
+  image: ninja-shortener-app
+  build: .
+  # 機敏設定一律由環境變數注入；標記 :? 的變數未設定時 compose 會直接中止，避免誤用預設值上線。
+  environment:
+    - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:?請在 .env 設定 DJANGO_SECRET_KEY}
+    - DJANGO_DEBUG=${DJANGO_DEBUG:-False}
+    - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:?請在 .env 設定 DJANGO_ALLOWED_HOSTS}
+    # TLS 由 Caddy 終結後以 HTTP 回源：http→https 轉址交給 Caddy（避免 Django 端轉址迴圈），
+    # 並信任 Caddy 帶上的 X-Forwarded-Proto，讓 Django 正確辨識 HTTPS、發送 Secure cookie。
+    - DJANGO_SECURE_SSL_REDIRECT=${DJANGO_SECURE_SSL_REDIRECT:-False}
+    - DJANGO_TRUST_PROXY_SSL_HEADER=${DJANGO_TRUST_PROXY_SSL_HEADER:-True}
+    - DJANGO_SECURE_HSTS_SECONDS=${DJANGO_SECURE_HSTS_SECONDS:-31536000}
+    - DJANGO_ANON_THROTTLE_RATE=${DJANGO_ANON_THROTTLE_RATE:-30/min}
+    - DJANGO_USER_THROTTLE_RATE=${DJANGO_USER_THROTTLE_RATE:-60/min}
+    - POSTGRES_DB=${POSTGRES_DB:-postgres}
+    - POSTGRES_USER=${POSTGRES_USER:-myuser}
+    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?請在 .env 設定 POSTGRES_PASSWORD}
+    - POSTGRES_HOST=${POSTGRES_HOST:-django-postgres}
+    - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+
+services:
+
+    migrate:
+      # 一次性「釋出」容器：集中執行所有會變更 DB schema 或寫入共用靜態檔的開機步驟，
+      # 跑完即退出（restart: "no"）。web / qcluster 以 service_completed_successfully
+      # 等它完成，確保 migrate 全域只發生一次，避免多個長駐容器開機各自 migrate 的競態。
+      # migrate 若失敗（非 0 退出），web / qcluster 依賴條件不成立而「不會啟動」(fail-fast)。
+      <<: *x-base-app
+      command: >
+        sh -c "python manage.py migrate &&
+               python manage.py createcachetable &&
+               python manage.py collectstatic --noinput"
+      restart: "no"
+      # collectstatic 將靜態檔（含 ManifestStaticFilesStorage 的 staticfiles.json）寫入此
+      # volume，供 web 在 runtime 讀取 manifest、Caddy 直接服務。
+      volumes:
+        - static-data:/ninja_shortener/staticfiles
+      depends_on:
+        django-postgres:
+          condition: service_started
+
+    web:
+      <<: *x-base-app
+      # gunicorn：生產級 WSGI 伺服器。worker 數可由 WEB_CONCURRENCY 調整（建議 2 * CPU + 1）。
+      command: >
+        gunicorn ninja_shortener.wsgi:application
+        --bind 0.0.0.0:8000
+        --workers ${WEB_CONCURRENCY:-3}
+        --access-logfile -
+        --error-logfile -
+      restart: always
+      # 唯讀掛載：gunicorn runtime 需讀 staticfiles.json（ManifestStaticFilesStorage）以
+      # 解析 {% static %}；靜態檔的「產生」由 migrate 服務負責，web 不寫入。
+      volumes:
+        - static-data:/ninja_shortener/staticfiles:ro
+      depends_on:
+        django-postgres:
+          condition: service_started
+        migrate:
+          condition: service_completed_successfully
+
+    qcluster:
+      # Django-Q2 背景 worker：處理 OG 抓取等非同步任務。
+      <<: *x-base-app
+      command: python manage.py qcluster
+      restart: unless-stopped
+      depends_on:
+        django-postgres:
+          condition: service_started
+        migrate:
+          condition: service_completed_successfully
+
+    django-postgres:
+      image: postgres:18
+      restart: always
+      environment:
+        - POSTGRES_DB=${POSTGRES_DB:-postgres}
+        - POSTGRES_USER=${POSTGRES_USER:-myuser}
+        - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?請在 .env 設定 POSTGRES_PASSWORD}
+        - PGDATA=/var/lib/postgresql/data/pgdata
+      volumes:
+        - db-data:/var/lib/postgresql/data/pgdata
+
+    caddy:
+      # 前層代理：自動 HTTPS（Let's Encrypt）、反向代理至 gunicorn、直接服務靜態檔。
+      image: caddy:2-alpine
+      restart: always
+      ports:
+        - "80:80"
+        - "443:443"
+      # SITE_ADDRESS 設為網域即啟用自動 HTTPS（需 80/443 對外且 DNS 指向本機）；
+      # 預設 :80 為純 HTTP，僅供本機冒煙測試。
+      environment:
+        - SITE_ADDRESS=${SITE_ADDRESS:-:80}
+      volumes:
+        - ./Caddyfile:/etc/caddy/Caddyfile:ro
+        - static-data:/srv/staticfiles:ro
+        - caddy-data:/data
+        - caddy-config:/config
+      depends_on:
+        - web
+
+volumes:
+  db-data:
+  static-data:
+  caddy-data:
+  caddy-config:
