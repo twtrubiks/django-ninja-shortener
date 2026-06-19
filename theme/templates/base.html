@@ -234,11 +234,39 @@
 		function copyToClipboard(text) {
 			if (!text) return;
 
-			navigator.clipboard.writeText(text).then(function() {
-				showToast('已複製到剪貼簿！', 'success');
-			}, function() {
+			// 現代 API 僅在安全上下文（HTTPS 或 localhost）可用；
+			// 純 HTTP 時 navigator.clipboard 為 undefined，需退回 execCommand。
+			if (navigator.clipboard && window.isSecureContext) {
+				navigator.clipboard.writeText(text).then(function() {
+					showToast('已複製到剪貼簿！', 'success');
+				}, function() {
+					fallbackCopy(text);
+				});
+			} else {
+				fallbackCopy(text);
+			}
+		}
+
+		// 非安全上下文（HTTP）的降級複製方案
+		function fallbackCopy(text) {
+			const textarea = document.createElement('textarea');
+			textarea.value = text;
+			textarea.setAttribute('readonly', '');
+			textarea.style.position = 'fixed';
+			textarea.style.top = '-9999px';
+			textarea.style.left = '-9999px';
+			document.body.appendChild(textarea);
+			textarea.select();
+			textarea.setSelectionRange(0, text.length);
+
+			try {
+				const ok = document.execCommand('copy');
+				showToast(ok ? '已複製到剪貼簿！' : '複製失敗，請手動複製', ok ? 'success' : 'error');
+			} catch (e) {
 				showToast('複製失敗，請手動複製', 'error');
-			});
+			} finally {
+				document.body.removeChild(textarea);
+			}
 		}
 
 		// Global: Auto-bind form loading state via data attributes
