@@ -1,4 +1,6 @@
 from datetime import timedelta
+from io import BytesIO
+from unittest.mock import patch
 
 import pytest
 from django.utils import timezone
@@ -133,3 +135,33 @@ class TestQRCodeAPI:
         # 測試混合
         response = client.get(f"/links/{link.short_code}/qr?dark=%23Ff00Aa")
         assert response.status_code == 200
+
+    def test_qr_encodes_short_url_and_passes_params(self):
+        """
+        QR 內容驗證：應以「完整短網址」與正確的尺寸 / 顏色參數呼叫產生器。
+
+        既有測試只驗 PNG 與狀態碼，無法擋住 URL 拼裝或參數傳遞的迴歸；
+        這裡以 mock 攔截 generate_qr_code，直接斷言傳入內容。
+        """
+        link = Link.objects.create(
+            original_url="https://example.com",
+            short_code="urltest",
+        )
+        client = TestClient(api)
+
+        with patch("shortener.api.generate_qr_code", return_value=BytesIO(b"PNG")) as mock_gen:
+            response = client.get(
+                f"/links/{link.short_code}/qr?size=512&dark=%23FF0000"
+            )
+
+        assert response.status_code == 200
+        mock_gen.assert_called_once()
+        kwargs = mock_gen.call_args.kwargs
+        # URL 應為「scheme://host/short_code」結構，且結尾必含本連結短碼
+        # （TestClient 下 scheme/host 為 mock，故只驗結構與短碼，不驗實際主機名）
+        assert "://" in kwargs["url"]
+        assert kwargs["url"].endswith("/urltest")
+        # 尺寸與顏色參數應原樣傳遞
+        assert kwargs["size"] == 512
+        assert kwargs["dark"] == "#FF0000"
+        assert kwargs["light"] == "#FFFFFF"

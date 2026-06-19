@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone as tz
+from unittest.mock import patch
 
 import pytest
 from django.contrib.auth.models import User
@@ -7,6 +8,7 @@ from ninja_jwt.tokens import RefreshToken
 
 from ninja_shortener.api import api
 from shortener.models import Link
+from shortener.services import ShortCodeGenerationError
 
 
 # Fixture: reset_ninja_registry 已移至 conftest.py
@@ -299,3 +301,98 @@ def test_delete_link_api_unauthenticated():
     assert response.status_code == 401
     # 連結應該仍然存在
     assert Link.objects.filter(short_code="unauth01").exists()
+
+
+# ===== Shorten 例外路徑（自訂 slug 撞名 / 短碼生成錯誤）=====
+
+@pytest.mark.django_db
+def test_shorten_duplicate_custom_slug_returns_409(test_user, ninja_authenticated_client):
+    """
+    測試 API - 自訂 slug 與既有連結衝突時回傳 409。
+    """
+    Link.objects.create(
+        original_url="https://example.com/first",
+        short_code="takenslug",
+        is_custom_slug=True,
+        owner=test_user,
+    )
+
+    response = ninja_authenticated_client.post(
+        "/shorten",
+        json={"original_url": "https://example.com/second", "custom_slug": "takenslug"},
+    )
+
+    assert response.status_code == 409
+    assert "已被使用" in response.json()["detail"]
+    # 不應因衝突而多建立連結
+    assert Link.objects.filter(short_code="takenslug").count() == 1
+
+
+@pytest.mark.django_db
+def test_shorten_short_code_generation_error_returns_500(ninja_authenticated_client):
+    """
+    測試 API - 短碼生成發生非預期錯誤（ShortCodeGenerationError）時回傳 500。
+    """
+    with patch(
+        "shortener.api.create_short_link",
+        side_effect=ShortCodeGenerationError(),
+    ):
+        response = ninja_authenticated_client.post(
+            "/shorten",
+            json={"original_url": "https://example.com/boom"},
+        )
+
+    assert response.status_code == 500
+    assert "系統發生錯誤" in response.json()["detail"]
+
+
+# ===== check-slug 端點 =====
+
+@pytest.mark.django_db
+def test_check_slug_available(ninja_authenticated_client):
+    """可用的 slug 應回 available=True"""
+    response = ninja_authenticated_client.get("/check-slug/freeslug")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["available"] is True
+    assert data["slug"] == "freeslug"
+
+
+@pytest.mark.django_db
+def test_check_slug_already_taken(test_user, ninja_authenticated_client):
+    """已被使用的 slug 應回 available=False"""
+    Link.objects.create(
+        original_url="https://example.com",
+        short_code="usedslug",
+        owner=test_user,
+    )
+
+    response = ninja_authenticated_client.get("/check-slug/usedslug")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["available"] is False
+    assert "已被使用" in data["message"]
+
+
+@pytest.mark.django_db
+def test_check_slug_reserved_word(ninja_authenticated_client):
+    """系統保留字應不可用"""
+    response = ninja_authenticated_client.get("/check-slug/admin")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["available"] is False
+    assert "保留字" in data["message"]
+
+
+@pytest.mark.django_db
+def test_check_slug_invalid_format(ninja_authenticated_client):
+    """格式不合（過短）應不可用，且回傳對應訊息"""
+    response = ninja_authenticated_client.get("/check-slug/ab")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["available"] is False
+    assert "至少 3 個字元" in data["message"]

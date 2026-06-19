@@ -49,7 +49,7 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 * **QR Code**：使用 [Segno](https://segno.readthedocs.io/) 生成 QR Code
 * **OG 解析**：使用 [metadata_parser](https://github.com/jvanasco/metadata_parser) 解析 Open Graph 資料
 * **非同步任務**：使用 [Django-Q2](https://django-q2.readthedocs.io/) 背景處理 OG 抓取（以 PostgreSQL ORM 作為 broker，免額外的 Redis）
-* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)（133 個測試案例，94% 覆蓋率）
+* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)（147 個測試案例，96% 覆蓋率）
 * **容器化**：[Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 快速啟動 (使用 Docker, 建議用這個)

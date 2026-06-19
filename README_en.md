@@ -49,7 +49,7 @@ With registration, you get more features like click tracking, expiration dates, 
 * **QR Code**: Uses [Segno](https://segno.readthedocs.io/) for QR code generation
 * **OG Parsing**: Uses [metadata_parser](https://github.com/jvanasco/metadata_parser) for Open Graph data parsing
 * **Async Tasks**: Uses [Django-Q2](https://django-q2.readthedocs.io/) to fetch OG data in the background (with PostgreSQL ORM as the broker, no extra Redis required)
-* **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial) (133 test cases, 94% coverage)
+* **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial) (147 test cases, 96% coverage)
 * **Containerization**: [Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 Quick Start (Using Docker, Recommended)
