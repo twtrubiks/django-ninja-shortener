@@ -2,6 +2,18 @@
 
 [中文版](README.md)
 
+[![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/)
+[![Django](https://img.shields.io/badge/Django-6.0-092E20.svg)](https://www.djangoproject.com/)
+[![Django Ninja](https://img.shields.io/badge/Django%20Ninja-1.6-green.svg)](https://django-ninja.dev/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-blue.svg)](https://www.postgresql.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4-38BDF8.svg)](https://tailwindcss.com/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
+[![JWT](https://img.shields.io/badge/Auth-JWT-orange.svg)](https://github.com/eadwinCode/django-ninja-jwt)
+[![Sqids](https://img.shields.io/badge/Sqids-short%20codes-blueviolet.svg)](https://sqids.org/)
+[![Django-Q2](https://img.shields.io/badge/Django--Q2-async%20tasks-44B78B.svg)](https://django-q2.readthedocs.io/)
+[![gunicorn](https://img.shields.io/badge/gunicorn-WSGI-499848.svg)](https://gunicorn.org/)
+[![Caddy](https://img.shields.io/badge/Caddy-auto%20HTTPS-1F88C0.svg)](https://caddyserver.com/)
+
 A modern URL shortener service built with Django, Django Ninja, and Tailwind CSS, inspired by Bitly.
 
 Users can register and log in to shorten URLs and track the click count for each short link.
@@ -12,13 +24,13 @@ Users can register and log in to shorten URLs and track the click count for each
 
 URL Shortener Page (Usable without registration)
 
-![alt tag](https://cdn.imgpile.com/f/qPDKjsy_xl.png)
+![alt tag](https://cdn.imgpile.com/f/g7TBHCO_md.png)
 
 With registration, you get more features like click tracking, expiration dates, custom URLs, and QR codes
 
-![alt tag](https://cdn.imgpile.com/f/0oOzE2J_xl.png)
+![alt tag](https://cdn.imgpile.com/f/KFN4HFX_xl.png)
 
-![alt tag](https://cdn.imgpile.com/f/NdaNWkE_xl.png)
+![alt tag](https://cdn.imgpile.com/f/igyvV2b_xl.png)
 
 ## ✨ Key Features
 
@@ -174,6 +186,7 @@ cp .env.example .env   # then adjust .env for your environment
 | `DJANGO_TRUST_PROXY_SSL_HEADER` | (when `DEBUG=False`) Trust reverse-proxy `X-Forwarded-Proto` to detect HTTPS | `False` |
 | `DJANGO_ANON_THROTTLE_RATE` | Rate limit for public API endpoints (per IP, format "count/period") | `30/min` |
 | `DJANGO_USER_THROTTLE_RATE` | Rate limit for authenticated API endpoints (per user) | `60/min` |
+| `DJANGO_SHORTEN_THROTTLE_RATE` | Rate limit for creating short URLs via the web form (per account when logged in, per IP when anonymous) | `10/min` |
 | `SITE_ADDRESS` | (`docker-compose.prod.yml`) Caddy's public address; set a domain to enable automatic HTTPS | `:80` |
 | `WEB_CONCURRENCY` | (`docker-compose.prod.yml`) Number of gunicorn workers | `3` |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Database name / user / password | `postgres` / `myuser` / `password123` |
@@ -263,12 +276,12 @@ Then, paste the token into the top right corner to authorize your API calls.
 ## 📂 Project Structure
 
 ```cmd
-ninja_shortener/
+django-ninja-shortener/
 ├── Dockerfile
 ├── docker-compose.yml        # Development (runserver + hot reload)
 ├── docker-compose.prod.yml   # Production (gunicorn + Caddy)
 ├── Caddyfile                 # Caddy front layer (auto HTTPS / reverse proxy / static)
-├── entrypoint.sh             # Boot: migrate (+ collectstatic in production)
+├── entrypoint.sh             # Only exec "$@"; migrate/collectstatic handled by the one-shot migrate service
 ├── manage.py
 ├── requirements.txt
 ├── pytest.ini                # Pytest configuration
@@ -297,7 +310,8 @@ ninja_shortener/
     │   ├── dashboard.html    # Dashboard (user link management, OG preview polling)
     │   ├── partials/         # Shared partial templates (OG preview card)
     │   └── expired.html      # Expired link page
-    └── static_src/           # Tailwind CSS source files
+    ├── static_src/           # Tailwind CSS source files
+    └── tests/                # UI flow tests (test_ui_flows.py)
 ```
 
 ## 💡 Future Roadmap
@@ -307,7 +321,7 @@ ninja_shortener/
 * **Custom Short URLs**: Allow users to customize the short code for their URLs. ✅ Completed
 * **QR Code Generation**: Generate a QR code for each short URL. ✅ Completed
 * **Asynchronous OG Fetching**: Make Open Graph data fetching asynchronous (Django-Q2, with PostgreSQL as the broker) to avoid blocking API requests. ✅ Completed
-* **API Rate Limiting**: Prevent abuse via django-ninja's built-in throttling — public endpoints throttled by IP, authenticated endpoints by user; counters stored in DatabaseCache by default (no extra service), with rates configurable via environment variables. ✅ Completed
+* **Rate Limiting**: Prevent abuse via django-ninja's built-in throttling — public API endpoints throttled by IP, authenticated API endpoints by user; creating short URLs via the web form is throttled separately (per account when logged in, per IP when anonymous), stopping anonymous DB flooding and background-request amplification. Counters stored in DatabaseCache by default (no extra service), with rates configurable via environment variables. ✅ Completed
 * **Production Deployment**: gunicorn instead of runserver, a Caddy front layer (auto HTTPS + reverse proxy + static serving), removal of boot-time `makemigrations`, and automatic `collectstatic` when `DEBUG=False`; see `docker-compose.prod.yml`. ✅ Completed
 * **Caching Layer**: Move throttling counters and popular link / OG preview data to Redis for better performance and cross-process consistency.
 

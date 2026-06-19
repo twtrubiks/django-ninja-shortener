@@ -2,6 +2,18 @@
 
 [English Version](README_en.md)
 
+[![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/)
+[![Django](https://img.shields.io/badge/Django-6.0-092E20.svg)](https://www.djangoproject.com/)
+[![Django Ninja](https://img.shields.io/badge/Django%20Ninja-1.6-green.svg)](https://django-ninja.dev/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-blue.svg)](https://www.postgresql.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4-38BDF8.svg)](https://tailwindcss.com/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
+[![JWT](https://img.shields.io/badge/Auth-JWT-orange.svg)](https://github.com/eadwinCode/django-ninja-jwt)
+[![Sqids](https://img.shields.io/badge/Sqids-short%20codes-blueviolet.svg)](https://sqids.org/)
+[![Django-Q2](https://img.shields.io/badge/Django--Q2-async%20tasks-44B78B.svg)](https://django-q2.readthedocs.io/)
+[![gunicorn](https://img.shields.io/badge/gunicorn-WSGI-499848.svg)](https://gunicorn.org/)
+[![Caddy](https://img.shields.io/badge/Caddy-auto%20HTTPS-1F88C0.svg)](https://caddyserver.com/)
+
 Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其設計靈感來自於 Bitly。
 
 使用者可以註冊登入後，將網址縮短，可追蹤每個短網址的點擊次數。
@@ -12,13 +24,13 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 
 短網址頁面 (沒註冊也可以使用)
 
-![alt tag](https://cdn.imgpile.com/f/qPDKjsy_xl.png)
+![alt tag](https://cdn.imgpile.com/f/g7TBHCO_md.png)
 
 如果註冊可以有更多功能, 像是 點擊次數, 設定過期日期, 自定義網址, QRCODE
 
-![alt tag](https://cdn.imgpile.com/f/0oOzE2J_xl.png)
+![alt tag](https://cdn.imgpile.com/f/KFN4HFX_xl.png)
 
-![alt tag](https://cdn.imgpile.com/f/NdaNWkE_xl.png)
+![alt tag](https://cdn.imgpile.com/f/igyvV2b_xl.png)
 
 ## ✨ 功能亮點
 
@@ -170,26 +182,20 @@ cp .env.example .env   # 之後依環境調整 .env 內容
 | `DJANGO_DEBUG` | 是否開啟 Debug 模式 | `True` |
 | `DJANGO_ALLOWED_HOSTS` | 允許的主機名（逗號分隔） | `*` |
 | `DJANGO_SECURE_SSL_REDIRECT` | （`DEBUG=False` 時）HTTP 自動轉址 HTTPS | `True` |
-| `DJANGO_SECURE_HSTS_SECONDS` | （`DEBUG=False` 時）HSTS 有效秒數 | `31536000` |
 | `DJANGO_TRUST_PROXY_SSL_HEADER` | （`DEBUG=False` 時）信任反向代理 `X-Forwarded-Proto` 辨識 HTTPS | `False` |
 | `DJANGO_ANON_THROTTLE_RATE` | 公開 API 端點流量上限（按 IP，格式「次數/週期」） | `30/min` |
 | `DJANGO_USER_THROTTLE_RATE` | 已認證 API 端點流量上限（按使用者） | `60/min` |
+| `DJANGO_SHORTEN_THROTTLE_RATE` | 網頁表單建立短網址流量上限（登入按帳號、匿名按 IP） | `10/min` |
 | `SITE_ADDRESS` | （`docker-compose.prod.yml`）Caddy 對外位址，設網域即啟用自動 HTTPS | `:80` |
-| `WEB_CONCURRENCY` | （`docker-compose.prod.yml`）gunicorn worker 數量 | `3` |
-| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | 資料庫名稱 / 帳號 / 密碼 | `postgres` / `myuser` / `password123` |
-| `POSTGRES_HOST` / `POSTGRES_PORT` | 資料庫位址 / 連接埠 | `django-postgres` / `5432` |
 
 **上生產環境前務必：**
 
-* 將 `DJANGO_SECRET_KEY` 換成隨機長字串（可用 `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"` 生成）。此金鑰同時是 JWT 簽章金鑰，外洩等同可偽造任意使用者的 token。
+* 將 `DJANGO_SECRET_KEY` 換成隨機長字串（可用 `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"` 生成）。
 * 設定 `DJANGO_DEBUG=False`。為避免誤用，當 `DEBUG=False` 卻仍沿用內建預設金鑰時，應用程式會直接拒絕啟動。
 * 將 `DJANGO_ALLOWED_HOSTS` 設為實際網域（例如 `example.com,www.example.com`）。
-* 使用強資料庫密碼，且不要將實際的 `.env` 提交進版控（`.gitignore` 已忽略 `.env`，僅保留 `.env.example`）。
 * **HTTPS 站台**：維持 `DJANGO_DEBUG=False` 即會自動啟用 HSTS、`SECURE_SSL_REDIRECT`、以及 session / CSRF 的 `Secure` cookie。若 TLS 由 nginx / Cloudflare 終結，依情況調整 `DJANGO_SECURE_SSL_REDIRECT` 與 `DJANGO_TRUST_PROXY_SSL_HEADER`。最後以 `python manage.py check --deploy` 驗收。
 
 ## 🚢 生產環境部署 (gunicorn + Caddy)
-
-開發用的 `docker compose up` 採 `runserver`（含熱重載），方便開發但**不適合上線**。正式部署請改用 `docker-compose.prod.yml`，它以生產級組態啟動：
 
 * **gunicorn**（WSGI）取代 `runserver`。
 * **Caddy** 作為前層：自動 HTTPS（Let's Encrypt）、反向代理至 gunicorn、並直接服務靜態檔。
@@ -211,10 +217,9 @@ cp .env.example .env
 docker compose -p ninja-prod -f docker-compose.prod.yml up -d --build
 ```
 
-* **`-p ninja-prod` 是專案名稱**（`--project-name`），會當前綴套在容器 / 網路 / 資料卷上（如 `ninja-prod_db-data`）。不帶 `-p` 時專案名預設為**目錄名**，會與開發用 `docker compose up` 共用同一個 `db-data` 資料卷而互相污染（例如 Postgres 密碼以先啟動者為準，導致另一套認證失敗）。用 `-p ninja-prod` 讓生產與開發資料卷**完全分家**。
+* **`-p ninja-prod` 是專案名稱**（`--project-name`），會當前綴套在容器 / 網路 / 資料卷上（如 `ninja-prod_db-data`）。不帶 `-p` 時專案名預設為**目錄名**，會與開發用 `docker compose up` 共用同一個 `db-data` 資料卷而互相污染。用 `-p ninja-prod` 讓生產與開發資料卷**完全分家**。
   * ⚠️ 用了 `-p ninja-prod` 後，**之後每一條 prod 指令都要帶**（`down` / `logs` / `ps` / `exec` …），否則會操作到另一個專案。
 * **本機冒煙測試**（不申請憑證）：保留 `SITE_ADDRESS=:80`，以純 HTTP 連 `http://localhost`。
-* `WEB_CONCURRENCY` 調整 gunicorn worker 數（建議 `2 * CPU + 1`）。
 * TLS 由 Caddy 終結後以 HTTP 回源，故生產預設 `DJANGO_SECURE_SSL_REDIRECT=False`（http→https 轉址交給 Caddy，避免迴圈）、`DJANGO_TRUST_PROXY_SSL_HEADER=True`（信任 Caddy 帶上的 `X-Forwarded-Proto`）。
 * 驗收：`docker compose -p ninja-prod -f docker-compose.prod.yml exec web python manage.py check --deploy`。
 * 若想改用 nginx 等其他前層，或讓 Django 自行服務靜態檔（無前層），可改以 WhiteNoise 服務 `/static/`。
@@ -263,12 +268,12 @@ API 提供了程式化的方式來與短網址服務互動。所有 API 端點�
 ## 📂 專案結構
 
 ```cmd
-ninja_shortener/
+django-ninja-shortener/
 ├── Dockerfile
 ├── docker-compose.yml        # 開發用（runserver + 熱重載）
 ├── docker-compose.prod.yml   # 生產用（gunicorn + Caddy）
 ├── Caddyfile                 # Caddy 前層設定（自動 HTTPS / 反向代理 / 靜態檔）
-├── entrypoint.sh             # 開機：migrate（+ 生產時 collectstatic）
+├── entrypoint.sh             # 僅 exec "$@"；migrate/collectstatic 交由一次性 migrate 服務
 ├── manage.py
 ├── requirements.txt
 ├── pytest.ini                # Pytest 設定
@@ -297,7 +302,8 @@ ninja_shortener/
     │   ├── dashboard.html    # 儀表板（用戶連結管理、OG 預覽輪詢）
     │   ├── partials/         # 共用局部模板（OG 預覽卡片）
     │   └── expired.html      # 過期連結頁面
-    └── static_src/           # Tailwind CSS 原始檔
+    ├── static_src/           # Tailwind CSS 原始檔
+    └── tests/                # UI 流程測試（test_ui_flows.py）
 ```
 
 ## 💡 未來展望
@@ -307,7 +313,7 @@ ninja_shortener/
 * **自訂短網址**：允許使用者自訂短網址的代碼。✅ 已完成
 * **QR Code 產生**：為每個短網址產生對應的 QR Code。✅ 已完成
 * **OG 抓取異步化**：將 Open Graph 資料抓取改為異步處理（Django-Q2，以 PostgreSQL 為 broker），避免阻塞 API 請求。✅ 已完成
-* **API 速率限制**：以 django-ninja 內建 throttling 防止濫用，公開端點按 IP、已認證端點按使用者；計數預設存於 DatabaseCache（免額外服務），速率可由環境變數調整。✅ 已完成
+* **速率限制**：以 django-ninja 內建 throttling 防止濫用，公開 API 端點按 IP、已認證 API 端點按使用者；網頁表單建立短網址亦獨立限流（登入按帳號、匿名按 IP），堵住匿名無限灌 DB 與背景請求放大。計數預設存於 DatabaseCache（免額外服務），速率可由環境變數調整。✅ 已完成
 * **生產環境部署**：以 gunicorn 取代 runserver、Caddy 前層（自動 HTTPS + 反向代理 + 服務靜態檔）、移除開機 `makemigrations`、`DEBUG=False` 時自動 `collectstatic`；見 `docker-compose.prod.yml`。✅ 已完成
 * **快取層**：將 throttling 計數與熱門連結 / OG 預覽資料改用 Redis 快取，獲得更佳效能與多程序間一致性。
 

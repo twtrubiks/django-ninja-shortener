@@ -1,4 +1,4 @@
-Django==6.0.6
+Django==6.0.7
 python-dotenv==1.2.2  # 從 .env 載入機敏設定（SECRET_KEY、DB 帳密等）
 django-ninja==1.6.2
 sqids==0.5.2
@@ -10,10 +10,10 @@ django-q2==1.10.0  # 非同步任務佇列（OG 抓取背景化）
 pytest-cov==7.1.0
 pytest-django==4.12.0
 psycopg[binary]==3.3.4  # psycopg3（binary 變體，免裝系統 libpq-dev）
-ruff==0.15.17  # for format
+ruff==0.15.21  # for format
 metadata_parser==1.0.0
 # metadata_parser 仍 import 已在 Python 3.13 移除的 cgi 模組（PEP 594）；用 legacy-cgi 補回（僅 3.13+ 生效）
 legacy-cgi==2.6.4; python_version >= "3.13"
 lxml==6.1.1  # 提升 metadata_parser 效能
 segno==1.6.6  # QR Code 生成
-gunicorn==23.0.0  # 生產級 WSGI 伺服器（取代開發用 runserver；見 docker-compose.prod.yml）
+gunicorn==26.0.0  # 生產級 WSGI 伺服器（取代開發用 runserver；見 docker-compose.prod.yml）
