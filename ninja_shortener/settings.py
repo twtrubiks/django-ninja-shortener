@@ -61,6 +61,32 @@ if not DEBUG and SECRET_KEY.startswith('django-insecure-'):
     )
 
 
+# ─────────────────────────────────────────────────────────────
+# 生產環境安全強化（僅在 DEBUG=False 時啟用，開發環境完全不受影響）。
+# 對應 Django 部署檢查表，可用 `python manage.py check --deploy` 驗收：
+# https://docs.djangoproject.com/en/stable/howto/deployment/checklist/
+# ─────────────────────────────────────────────────────────────
+if not DEBUG:
+    # session / CSRF cookie 僅透過 HTTPS 傳送，避免在明文連線被竊取。
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    # 將 HTTP 自動轉址到 HTTPS。若 TLS 由前層（nginx / Cloudflare）終結後以
+    # 純 HTTP 回源，設 DJANGO_SECURE_SSL_REDIRECT=False 交給前層處理，避免轉址迴圈。
+    SECURE_SSL_REDIRECT = _env_bool('DJANGO_SECURE_SSL_REDIRECT', True)
+
+    # HSTS：要求瀏覽器在指定秒數內一律以 HTTPS 連線（預設一年，涵蓋子網域、
+    # 允許進入瀏覽器 preload 清單）。務必確認整站可長期 HTTPS 後再沿用此值。
+    SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    # 反向代理以 X-Forwarded-Proto 傳遞原始協定時，讓 Django 正確辨識 HTTPS 請求。
+    # ⚠️ 僅在「受信任、且會自行覆寫此標頭的代理」後開啟，否則客戶端可偽造。預設關閉。
+    if _env_bool('DJANGO_TRUST_PROXY_SSL_HEADER', False):
+        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -153,6 +179,19 @@ Q_CLUSTER = {
     'bulk': 10,
     'orm': 'default',  # 使用 Django ORM（Postgres）作為 broker
     'catch_up': False,  # 重啟後不補跑錯過的排程任務
+}
+
+
+# 快取後端
+# django-ninja 內建 throttling 的請求計數即存放於此（見 shortener/api.py）。
+# 預設用 DatabaseCache（沿用既有 Postgres，免額外服務即可上線）；正式環境若已備
+# Redis，改用 RedisCache 可獲得更佳效能與多程序（gunicorn worker）間的一致計數。
+# 對應的快取資料表由 `python manage.py createcachetable` 建立（entrypoint.sh 已含）。
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'cache_table',
+    }
 }
 
 

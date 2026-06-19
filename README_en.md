@@ -33,7 +33,7 @@ With registration, you get more features like click tracking, expiration dates, 
 * **Personal Dashboard**: Paginated display of all user's short URLs and statistics, with link deletion support.
 * **Link Limit**: Each logged-in user can create up to 1000 links.
 * **RESTful API**: Complete API endpoints with JWT authentication.
-* **Security Protection**: SSRF protection (resolves the actual IP and performs object-level checks via `ipaddress`, covering decimal / hex / octal / IPv6-mapped encoding bypasses, and re-validates every redirect target; DNS rebinding is a known limitation), OG fetch response size limit (streamed read that caps decompressed bytes to guard against decompression bombs / oversized bodies exhausting the background worker), URL protocol validation, CSRF protection, TOCTOU race condition prevention.
+* **Security Protection**: SSRF protection (resolves the actual IP and performs object-level checks via `ipaddress`, covering decimal / hex / octal / IPv6-mapped encoding bypasses, and re-validates every redirect target; DNS rebinding is a known limitation), OG fetch response size limit (streamed read that caps decompressed bytes to guard against decompression bombs / oversized bodies exhausting the background worker), URL protocol validation, CSRF protection, TOCTOU race condition prevention, production HTTPS hardening (HSTS, HTTPS redirect, and `Secure` cookies auto-enabled when `DEBUG=False`).
 * **Environment-based Configuration**: `SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, and database credentials can all be injected via environment variables; in production (`DEBUG=False`) the app refuses to start if the built-in default key is still in use. See the "Environment Variables & Production Setup" section below.
 * **Docker Support**: Includes Dockerfile and Docker Compose setup to simplify development and deployment.
 
@@ -169,6 +169,9 @@ cp .env.example .env   # then adjust .env for your environment
 | `DJANGO_SECRET_KEY` | Django secret key, also used for JWT signing | built-in insecure dev key |
 | `DJANGO_DEBUG` | Enable debug mode | `True` |
 | `DJANGO_ALLOWED_HOSTS` | Allowed hostnames (comma-separated) | `*` |
+| `DJANGO_SECURE_SSL_REDIRECT` | (when `DEBUG=False`) Redirect HTTP to HTTPS | `True` |
+| `DJANGO_SECURE_HSTS_SECONDS` | (when `DEBUG=False`) HSTS max-age in seconds | `31536000` |
+| `DJANGO_TRUST_PROXY_SSL_HEADER` | (when `DEBUG=False`) Trust reverse-proxy `X-Forwarded-Proto` to detect HTTPS | `False` |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Database name / user / password | `postgres` / `myuser` / `password123` |
 | `POSTGRES_HOST` / `POSTGRES_PORT` | Database host / port | `django-postgres` / `5432` |
 
@@ -178,6 +181,7 @@ cp .env.example .env   # then adjust .env for your environment
 * Set `DJANGO_DEBUG=False`. As a safeguard, the app refuses to start when `DEBUG=False` while the built-in default key is still in use.
 * Set `DJANGO_ALLOWED_HOSTS` to your real domains (e.g. `example.com,www.example.com`).
 * Use a strong database password, and never commit your actual `.env` (it is already ignored by `.gitignore`; only `.env.example` is tracked).
+* **HTTPS sites**: keeping `DJANGO_DEBUG=False` automatically enables HSTS, `SECURE_SSL_REDIRECT`, and `Secure` cookies for sessions / CSRF. If TLS is terminated by nginx / Cloudflare, adjust `DJANGO_SECURE_SSL_REDIRECT` and `DJANGO_TRUST_PROXY_SSL_HEADER` accordingly. Verify with `python manage.py check --deploy`.
 
 ## 🧪 Running Tests
 
