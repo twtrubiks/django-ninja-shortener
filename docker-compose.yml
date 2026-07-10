@@ -41,7 +41,9 @@ services:
       restart: "no"
       depends_on:
         django-postgres:
-          condition: service_started
+          # 等到 healthcheck 通過（能接受連線）才跑 migrate，
+          # 避免 Postgres 尚未就緒導致 migrate 連線失敗退出、整組服務起不來。
+          condition: service_healthy
 
     django-ninja:
       <<: *x-base-app
@@ -84,6 +86,15 @@ services:
         - PGDATA=/var/lib/postgresql/data/pgdata
       volumes:
         - db-data:/var/lib/postgresql/data/pgdata
+      healthcheck:
+        # -h 127.0.0.1 強制走 TCP：initdb 階段的暫存伺服器只聽 unix socket，
+        # 走 TCP 檢查可避免初始化尚未完成就被誤判為健康。
+        test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+        interval: 5s
+        timeout: 5s
+        retries: 5
+        # 首次啟動需跑 initdb，較耗時；這段期間的失敗不計入 retries
+        start_period: 30s
 
     tailwind:
       <<: *x-base-app
