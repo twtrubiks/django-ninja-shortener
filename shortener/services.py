@@ -29,8 +29,8 @@ class SlugAlreadyExistsError(Exception):
 class ShortCodeGenerationError(Exception):
     """短碼生成失敗。
 
-    Sqids 以資料庫 ID 生成的短碼理論上不會重複，
-    若仍發生唯一約束衝突即代表系統異常。
+    Sqids 以資料庫 ID 生成的短碼理論上不會重複，但可能撞上
+    恰好等於某 ID 編碼結果的既有自訂 slug；retry 一次後仍衝突才拋出。
     """
 
 
@@ -48,6 +48,9 @@ def create_short_link(
     本函式只負責建立：custom_slug 直接寫入並依賴 DB 唯一約束避免 TOCTOU 競態，
     否則以資料庫 ID 經 Sqids 生成零碰撞短碼。
 
+    自動生成的短碼仍可能撞上恰好等於某 ID 編碼結果的既有自訂 slug，
+    此時 retry 一次即可自癒：DB sequence 不隨交易回滾，重試必拿到新 ID → 新短碼。
+
     Args:
         original_url: 已驗證的目標網址字串
         owner: 連結擁有者，匿名建立時為 None
@@ -59,34 +62,35 @@ def create_short_link(
 
     Raises:
         SlugAlreadyExistsError: custom_slug 與既有連結衝突
-        ShortCodeGenerationError: 自動短碼生成發生非預期的唯一約束衝突
+        ShortCodeGenerationError: 自動短碼生成 retry 後仍發生唯一約束衝突
     """
-    try:
-        with transaction.atomic():
+    max_attempts = 1 if custom_slug else 2
+    for _ in range(max_attempts):
+        try:
+            with transaction.atomic():
+                if custom_slug:
+                    link = Link.objects.create(
+                        original_url=original_url,
+                        short_code=custom_slug,
+                        is_custom_slug=True,
+                        owner=owner,
+                        expires_at=expires_at,
+                    )
+                else:
+                    link = Link.objects.create(
+                        original_url=original_url,
+                        is_custom_slug=False,
+                        owner=owner,
+                        expires_at=expires_at,
+                    )
+                    # 使用資料庫 ID 生成短碼（零碰撞）
+                    link.short_code = generate_short_code_from_id(link.id)
+                    link.save(update_fields=['short_code'])
+            return link
+        except IntegrityError:
             if custom_slug:
-                link = Link.objects.create(
-                    original_url=original_url,
-                    short_code=custom_slug,
-                    is_custom_slug=True,
-                    owner=owner,
-                    expires_at=expires_at,
-                )
-            else:
-                link = Link.objects.create(
-                    original_url=original_url,
-                    is_custom_slug=False,
-                    owner=owner,
-                    expires_at=expires_at,
-                )
-                # 使用資料庫 ID 生成短碼（零碰撞）
-                link.short_code = generate_short_code_from_id(link.id)
-                link.save(update_fields=['short_code'])
-    except IntegrityError:
-        if custom_slug:
-            raise SlugAlreadyExistsError(custom_slug)
-        raise ShortCodeGenerationError()
-
-    return link
+                raise SlugAlreadyExistsError(custom_slug)
+    raise ShortCodeGenerationError()
 
 
 def fetch_and_save_preview(link: Link) -> LinkPreview:

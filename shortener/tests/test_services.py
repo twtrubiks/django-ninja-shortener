@@ -3,7 +3,8 @@ Service 層核心邏輯與例外路徑測試
 
 補上 create_short_link 兩條過去零覆蓋的例外分支：
 - 自訂 slug 撞名 → SlugAlreadyExistsError
-- 自動短碼生成遇非預期唯一約束衝突 → ShortCodeGenerationError（並驗證 atomic 回滾）
+- 自動短碼首次撞唯一約束 → retry 一次自癒
+- 自動短碼 retry 後仍衝突 → ShortCodeGenerationError（並驗證 atomic 回滾）
 """
 
 from unittest.mock import patch
@@ -60,9 +61,36 @@ class TestCreateShortLink:
         assert exc_info.value.slug == 'dup'
         assert Link.objects.filter(short_code='dup').count() == 1
 
+    def test_auto_short_code_collision_retries_and_succeeds(self, test_user):
+        """
+        自動短碼首次撞上既有 short_code（例如恰好等於某 ID 編碼結果的自訂 slug）時，
+        應 retry 一次並以新 ID 生成的短碼成功建立。
+        """
+        Link.objects.create(
+            original_url='https://example.com/existing',
+            short_code='taken01',
+            is_custom_slug=True,
+            owner=test_user,
+        )
+
+        # 第一次生成撞名，retry 拿到新短碼
+        with patch(
+            'shortener.services.generate_short_code_from_id',
+            side_effect=['taken01', 'fresh002'],
+        ):
+            link = create_short_link(
+                original_url='https://example.com/new',
+                owner=test_user,
+            )
+
+        assert link.short_code == 'fresh002'
+        assert link.is_custom_slug is False
+        # 首次失敗的半成品已回滾，最終只留一筆新連結
+        assert Link.objects.filter(original_url='https://example.com/new').count() == 1
+
     def test_auto_short_code_collision_raises_generation_error(self, test_user):
         """
-        自動短碼路徑若撞上既有 short_code（理論上不該發生），
+        自動短碼路徑若 retry 一次後仍撞上既有 short_code（理論上不該發生），
         應轉為 ShortCodeGenerationError，且 atomic 區塊回滾不留半成品。
         """
         Link.objects.create(
