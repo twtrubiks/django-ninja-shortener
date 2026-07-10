@@ -324,3 +324,8 @@ USER_MAX_LINKS = 1000
 # 可由環境變數覆蓋，以因應不同部署規模。
 ANON_THROTTLE_RATE = os.environ.get('DJANGO_ANON_THROTTLE_RATE', '30/min')
 USER_THROTTLE_RATE = os.environ.get('DJANGO_USER_THROTTLE_RATE', '60/min')
+
+# 網頁表單建立短網址的速率限制（見 shortener/views.py）。
+# 登入用戶按帳號計數、匿名按來源 IP 計數。設得比 API 嚴：表單是人手操作，
+# 10/min 對人類綽綽有餘；程式化批量建立應走 API（JWT + USER_THROTTLE_RATE）。
+SHORTEN_THROTTLE_RATE = os.environ.get('DJANGO_SHORTEN_THROTTLE_RATE', '10/min')

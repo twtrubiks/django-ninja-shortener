@@ -13,6 +13,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views import generic
+from ninja.throttling import UserRateThrottle
 
 from .models import Link, LinkPreview
 from .services import (
@@ -34,6 +35,22 @@ EXPIRES_IN_CHOICES = {
 
 # Dashboard 每頁顯示數量
 DASHBOARD_ITEMS_PER_PAGE = 25
+
+
+class _ShortenWebThrottle(UserRateThrottle):
+    """網頁表單建立短網址的速率限制：登入按帳號、匿名按來源 IP。
+
+    獨立 scope 讓 cache key 不與其他 UserRateThrottle 使用處共用計數 bucket。
+    IP 取自 X-Forwarded-For：生產環境前層是 Caddy 2.5+，會丟棄 client 自帶的
+    X-Forwarded-* 並重寫為真實來源 IP，故無偽造疑慮；若前層改為 nginx 等
+    不會 strip 該標頭的代理，需另設 NINJA_NUM_PROXIES 防偽造繞過。
+    """
+
+    scope = 'shorten_web'
+
+
+# 計數存於 Django cache（與 API throttle 同一套，見 settings.CACHES）
+_shorten_throttle = _ShortenWebThrottle(getattr(settings, 'SHORTEN_THROTTLE_RATE', '10/min'))
 
 
 def home_view(request):
@@ -78,6 +95,11 @@ def redirect_view(request, short_code):
 
 def shorten_url_view(request):
     if request.method == 'POST':
+        # 速率限制放在所有處理之前：無效嘗試也計數，超量以最低成本拒絕
+        if not _shorten_throttle.allow_request(request):
+            messages.error(request, '操作過於頻繁，請稍後再試')
+            return redirect('home')
+
         if original_url := request.POST.get('original_url'):
             # 驗證 URL 協議
             try:
