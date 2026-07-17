@@ -35,6 +35,29 @@ class Link(models.Model):
         return self.expires_at < timezone.now()
 
 
+class ApiKey(models.Model):
+    """長效 API Key（Personal Access Token），供程式化串接與瀏覽器擴充套件使用。
+
+    只儲存金鑰的 SHA-256 雜湊（見 shortener/auth.py），明文僅在建立當下顯示一次；
+    資料庫外洩時攻擊者拿不到可用的金鑰明文。
+    """
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='api_keys')
+    name = models.CharField(max_length=100)
+    key_hash = models.CharField(max_length=64, unique=True)
+    prefix = models.CharField(max_length=16)  # 明文開頭數字元，供列表辨識用
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['owner', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.name} ({self.prefix}…) for {self.owner.username}'
+
+
 class LinkPreview(models.Model):
     """儲存 Open Graph 預覽資料"""
 

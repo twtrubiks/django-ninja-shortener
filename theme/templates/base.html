@@ -55,6 +55,10 @@
 						   class="text-gray-700 hover:text-purple-700 font-medium transition-colors focus-ring rounded px-2 py-1">
 							儀表板
 						</a>
+						<a href="{% url 'api_keys' %}"
+						   class="text-gray-700 hover:text-purple-700 font-medium transition-colors focus-ring rounded px-2 py-1">
+							API Keys
+						</a>
 						<span class="text-gray-600 text-sm">您好, {{ user.username }}!</span>
 						<form action="{% url 'logout' %}" method="post" class="inline">
 							{% csrf_token %}
@@ -87,6 +91,10 @@
 						<a href="{% url 'dashboard' %}"
 						   class="block text-gray-700 hover:text-purple-700 hover:bg-purple-50 font-medium transition-colors focus-ring rounded-lg px-3 py-2">
 							儀表板
+						</a>
+						<a href="{% url 'api_keys' %}"
+						   class="block text-gray-700 hover:text-purple-700 hover:bg-purple-50 font-medium transition-colors focus-ring rounded-lg px-3 py-2">
+							API Keys
 						</a>
 						<form action="{% url 'logout' %}" method="post">
 							{% csrf_token %}

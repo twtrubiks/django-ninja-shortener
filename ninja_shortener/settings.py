@@ -317,6 +317,9 @@ RESERVED_SLUGS = frozenset({
 # 每位用戶最多可建立的連結數量
 USER_MAX_LINKS = 1000
 
+# 每位用戶最多可持有的 API Key 數量
+USER_MAX_API_KEYS = 10
+
 
 # API 流量限制（django-ninja 內建 throttling，請求計數存於上方 CACHES）
 # 公開端點（QR）按來源 IP；已認證端點按使用者。

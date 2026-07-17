@@ -41,6 +41,11 @@ urlpatterns = [
     path('links/<str:short_code>/preview-status/', shortener_views.preview_status_view, name='preview_status'),
     path('links/<str:short_code>/delete/', shortener_views.delete_link_view, name='delete_link'),
 
+    # API Key 管理
+    path('settings/api-keys/', shortener_views.api_keys_view, name='api_keys'),
+    path('settings/api-keys/create/', shortener_views.create_api_key_view, name='create_api_key'),
+    path('settings/api-keys/<int:key_id>/delete/', shortener_views.delete_api_key_view, name='delete_api_key'),
+
     # Redirect (must be last due to catch-all pattern)
     path('<str:short_code>', shortener_views.redirect_view, name='redirect'),
 

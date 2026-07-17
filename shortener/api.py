@@ -7,9 +7,9 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from ninja import Query, Router, Schema, Status
 from ninja.throttling import AnonRateThrottle, AuthRateThrottle
-from ninja_jwt.authentication import JWTAuth
 from pydantic import HttpUrl, field_validator
 
+from .auth import ApiKeyOrJWTAuth
 from .models import Link, LinkPreview
 from .qr_utils import generate_qr_code
 from .services import (
@@ -163,7 +163,7 @@ def _link_to_response(link: Link) -> dict:
 @router.post(
     '/shorten',
     response={200: LinkWithPreviewSchema, 403: LinkLimitExceededSchema, 409: ErrorSchema, 500: ErrorSchema},
-    auth=JWTAuth(),
+    auth=ApiKeyOrJWTAuth(),
     throttle=[_user_throttle],
 )
 def shorten_url(request, payload: ShortenRequest):
@@ -213,7 +213,7 @@ def shorten_url(request, payload: ShortenRequest):
 @router.post(
     '/links/{short_code}/refresh-preview',
     response=LinkWithPreviewSchema,
-    auth=JWTAuth(),
+    auth=ApiKeyOrJWTAuth(),
     throttle=[_user_throttle],
 )
 def refresh_link_preview(request, short_code: str):
@@ -240,7 +240,7 @@ def refresh_link_preview(request, short_code: str):
 @router.get(
     '/links/{short_code}',
     response=LinkWithPreviewSchema,
-    auth=JWTAuth(),
+    auth=ApiKeyOrJWTAuth(),
     throttle=[_user_throttle],
 )
 def get_link_detail(request, short_code: str):
@@ -289,7 +289,7 @@ def get_qr_code(request, short_code: str, params: QRCodeParams = Query(...)):
 @router.get(
     '/check-slug/{slug}',
     response=SlugAvailabilityResponse,
-    auth=JWTAuth(),
+    auth=ApiKeyOrJWTAuth(),
     throttle=[_user_throttle],
 )
 def check_slug_availability(request, slug: str):
@@ -327,7 +327,7 @@ def check_slug_availability(request, slug: str):
 @router.delete(
     '/links/{short_code}',
     response={200: dict, 403: ErrorSchema, 404: ErrorSchema},
-    auth=JWTAuth(),
+    auth=ApiKeyOrJWTAuth(),
     throttle=[_user_throttle],
 )
 def delete_link(request, short_code: str):

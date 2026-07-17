@@ -15,7 +15,8 @@ from django.utils import timezone
 from django.views import generic
 from ninja.throttling import UserRateThrottle
 
-from .models import Link, LinkPreview
+from .auth import generate_api_key, hash_api_key
+from .models import ApiKey, Link, LinkPreview
 from .services import (
     ShortCodeGenerationError,
     SlugAlreadyExistsError,
@@ -216,6 +217,59 @@ def preview_status_view(request, short_code):
         request=request,
     )
     return JsonResponse({'status': status, 'html': html})
+
+
+@login_required
+def api_keys_view(request):
+    """API Key 管理頁：列出金鑰與建立表單
+
+    剛建立的金鑰明文透過 session 傳遞、只顯示這一次（同 home 頁
+    latest_short_url 的模式），之後只能看到 prefix。
+    """
+    context = {
+        'api_keys': ApiKey.objects.filter(owner=request.user).order_by('-created_at'),
+        'max_api_keys': getattr(settings, 'USER_MAX_API_KEYS', 10),
+    }
+    if 'new_api_key' in request.session:
+        context['new_api_key'] = request.session['new_api_key']
+        del request.session['new_api_key']
+    return render(request, 'api_keys.html', context)
+
+
+@login_required
+def create_api_key_view(request):
+    """建立 API Key，明文放進 session 供管理頁一次性顯示"""
+    if request.method != 'POST':
+        return redirect('api_keys')
+
+    max_keys = getattr(settings, 'USER_MAX_API_KEYS', 10)
+    if ApiKey.objects.filter(owner=request.user).count() >= max_keys:
+        messages.error(request, f'您已達到 API Key 上限（{max_keys} 個），請先撤銷不用的金鑰')
+        return redirect('api_keys')
+
+    name = request.POST.get('name', '').strip()[:100] or '未命名'
+    raw_key = generate_api_key()
+    ApiKey.objects.create(
+        owner=request.user,
+        name=name,
+        key_hash=hash_api_key(raw_key),
+        prefix=raw_key[:8],
+    )
+    request.session['new_api_key'] = raw_key
+    messages.success(request, 'API Key 已建立，請立即複製保存——它只會顯示這一次')
+    return redirect('api_keys')
+
+
+@login_required
+def delete_api_key_view(request, key_id):
+    """撤銷（刪除）API Key"""
+    if request.method != 'POST':
+        return redirect('api_keys')
+
+    api_key = get_object_or_404(ApiKey, pk=key_id, owner=request.user)
+    api_key.delete()
+    messages.success(request, 'API Key 已撤銷')
+    return redirect('api_keys')
 
 
 @login_required
