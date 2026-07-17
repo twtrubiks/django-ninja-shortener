@@ -123,6 +123,15 @@ class SlugAvailabilityResponse(Schema):
     message: str
 
 
+class LinkListResponse(Schema):
+    """連結列表回應（分頁）"""
+
+    items: list[LinkWithPreviewSchema]
+    count: int
+    page: int
+    page_size: int
+
+
 # ========== Helper Functions ==========
 
 
@@ -235,6 +244,34 @@ def refresh_link_preview(request, short_code: str):
     link.refresh_from_db()
 
     return _link_to_response(link)
+
+
+@router.get(
+    '/links',
+    response=LinkListResponse,
+    auth=ApiKeyOrJWTAuth(),
+    throttle=[_user_throttle],
+)
+def list_links(request, page: int = 1, page_size: int = 10):
+    """
+    列出目前使用者的連結（含預覽，新到舊、分頁）
+
+    - 需要認證（JWT 或 API Key）
+    - page 從 1 起算；page_size 上限 50
+    """
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 50)
+
+    queryset = (
+        Link.objects.filter(owner=request.user)
+        .select_related('preview')
+        .order_by('-created_at')
+    )
+    count = queryset.count()
+    offset = (page - 1) * page_size
+    items = [_link_to_response(link) for link in queryset[offset:offset + page_size]]
+
+    return {'items': items, 'count': count, 'page': page, 'page_size': page_size}
 
 
 @router.get(
