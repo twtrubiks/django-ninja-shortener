@@ -18,7 +18,7 @@ from .services import (
     create_short_link,
     enqueue_preview_fetch,
 )
-from .validators import validate_custom_slug
+from .validators import MAX_URL_LENGTH, validate_custom_slug
 
 router = Router(tags=['shorteners'])
 
@@ -44,6 +44,14 @@ class ShortenRequest(Schema):
         if v is None or v.strip() == '':
             return None
         return validate_custom_slug(v)
+
+    @field_validator('original_url')
+    @classmethod
+    def validate_url_length(cls, v: HttpUrl) -> HttpUrl:
+        # HttpUrl 本身放行到 2083 字元，超過資料庫欄位上限需在此擋下
+        if len(str(v)) > MAX_URL_LENGTH:
+            raise ValueError(f'網址過長（上限 {MAX_URL_LENGTH} 字元）')
+        return v
 
 
 class QRCodeParams(Schema):

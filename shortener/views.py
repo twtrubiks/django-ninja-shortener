@@ -23,7 +23,7 @@ from .services import (
     create_short_link,
     enqueue_preview_fetch,
 )
-from .validators import validate_custom_slug, validate_url_scheme
+from .validators import MAX_URL_LENGTH, validate_custom_slug, validate_url_scheme
 
 # 允許的過期時間選項（秒）- 白名單驗證
 EXPIRES_IN_CHOICES = {
@@ -102,6 +102,11 @@ def shorten_url_view(request):
             return redirect('home')
 
         if original_url := request.POST.get('original_url'):
+            # 長度驗證（超過資料庫欄位上限會直接寫入失敗）
+            if len(original_url) > MAX_URL_LENGTH:
+                messages.error(request, f'網址過長（上限 {MAX_URL_LENGTH} 字元）')
+                return redirect('home')
+
             # 驗證 URL 協議
             try:
                 validate_url_scheme(original_url)

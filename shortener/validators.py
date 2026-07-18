@@ -6,6 +6,10 @@ from django.core.exceptions import ValidationError
 
 ALLOWED_SCHEMES = {'http', 'https'}
 
+# 目標網址長度上限（與 Link.original_url 的 max_length 一致；
+# 超過者需在寫入前擋下，否則會撞資料庫欄位長度直接 500）
+MAX_URL_LENGTH = 2000
+
 # Slug 格式正規表達式：英數字和連字號，不能以連字號開頭或結尾
 SLUG_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$')
 
