@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>Shorty</h1>
+    <button id="open-options" class="icon-btn" title="設定">⚙</button>
+  </header>
+
+  <!-- 尚未完成設定 -->
+  <div id="not-configured" class="hidden">
+    <p class="muted">尚未設定伺服器網址與 API Key。</p>
+    <button id="go-setup" class="primary">前往設定</button>
+  </div>
+
+  <div id="main" class="hidden">
+    <!-- 縮短當前分頁 -->
+    <section>
+      <div id="current-url" class="muted ellipsis" title=""></div>
+      <button id="shorten-current" class="primary">縮短當前分頁</button>
+    </section>
+
+    <!-- 自訂網址 / slug -->
+    <details>
+      <summary>輸入任意網址（可自訂 slug）</summary>
+      <div class="stack">
+        <input id="custom-url" type="url" placeholder="https://example.com/very/long/url">
+        <input id="custom-slug" type="text" placeholder="自訂 slug（可留空自動生成）">
+        <button id="shorten-custom">建立短網址</button>
+      </div>
+    </details>
+
+    <!-- 結果 -->
+    <div id="result" class="hidden">
+      <a id="result-link" target="_blank" rel="noopener"></a>
+      <button id="copy-result" title="複製">複製</button>
+    </div>
+    <div id="status" class="hidden"></div>
+
+    <!-- 最近的連結 -->
+    <section id="recent-section">
+      <h2>最近的連結</h2>
+      <ul id="recent-list"></ul>
+      <p id="recent-empty" class="muted hidden">還沒有任何連結</p>
+    </section>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

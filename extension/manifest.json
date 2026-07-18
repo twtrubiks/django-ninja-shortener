@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Shorty 短網址",
+  "version": "0.1.0",
+  "description": "一鍵縮短當前分頁網址，自動複製到剪貼簿（Django Ninja Shortener 擴充套件）",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Shorty 短網址"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "permissions": ["activeTab", "storage", "clipboardWrite"],
+  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"]
+}

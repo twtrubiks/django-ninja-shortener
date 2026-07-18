@@ -65,7 +65,7 @@
               </div>
             </div>
             <form action="{% url 'delete_api_key' key.id %}" method="post"
-                  onsubmit="return confirm('確定要撤銷「{{ key.name }}」嗎？使用此金鑰的程式將立即失效。');">
+                  onsubmit="return confirm('確定要撤銷「{{ key.name|escapejs }}」嗎？使用此金鑰的程式將立即失效。');">
               {% csrf_token %}
               <button type="submit"
                       class="min-h-[44px] bg-red-50 hover:bg-red-100 text-red-700 py-2 px-4 rounded-lg transition-colors cursor-pointer focus-ring btn-press">

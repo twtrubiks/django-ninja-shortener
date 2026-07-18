@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>Shorty 設定</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <h1>Shorty 設定</h1>
+    <p class="muted">
+      填入你的短網址伺服器與 API Key。API Key 請登入網站後至「API Keys」頁面建立。
+    </p>
+
+    <label for="base-url">伺服器網址</label>
+    <input id="base-url" type="url" placeholder="https://your-shortener.example.com">
+
+    <label for="api-key">API Key</label>
+    <input id="api-key" type="password" placeholder="sk_...">
+    <p id="key-hint" class="muted hidden"></p>
+
+    <button id="save" class="primary">儲存並測試連線</button>
+
+    <div id="status" class="hidden"></div>
+  </main>
+
+  <script src="options.js"></script>
+</body>
+</html>
