@@ -32,6 +32,10 @@ With registration, you get more features like click tracking, expiration dates, 
 
 ![alt tag](https://cdn.imgpile.com/f/igyvV2b_xl.png)
 
+Chrome Extension
+
+![alt tag](https://cdn.imgpile.com/f/XVTnqjC_xl.png)
+
 ## ✨ Key Features
 
 * **User Authentication**: Supports user registration, login, and logout, using JWT for API authentication.
@@ -44,7 +48,9 @@ With registration, you get more features like click tracking, expiration dates, 
 * **QR Code Generation**: Generate QR codes for each short URL, supporting multiple sizes (128/256/512px) and custom colors.
 * **Personal Dashboard**: Paginated display of all user's short URLs and statistics, with link deletion support.
 * **Link Limit**: Each logged-in user can create up to 1000 links.
-* **RESTful API**: Complete API endpoints with JWT authentication.
+* **RESTful API**: Complete API endpoints with JWT or long-lived API Key authentication.
+* **API Key (Personal Access Token)**: Long-lived keys are ideal for programmatic integration and browser extensions (no JWT expiry/refresh); the database stores only a SHA-256 hash, and the plaintext is shown only once at creation. Create and revoke them on the web "API Keys" page (up to 10 per user).
+* **Chrome Browser Extension**: Manifest V3, one-click shorten the current tab and auto-copy to clipboard, with custom slug support and a recent links list. See the "Chrome Extension" section below.
 * **Security Protection**: SSRF protection (resolves the actual IP and performs object-level checks via `ipaddress`, covering decimal / hex / octal / IPv6-mapped encoding bypasses, and re-validates every redirect target; DNS rebinding is a known limitation), OG fetch response size limit (streamed read that caps decompressed bytes to guard against decompression bombs / oversized bodies exhausting the background worker), URL protocol validation, CSRF protection, TOCTOU race condition prevention, production HTTPS hardening (HSTS, HTTPS redirect, and `Secure` cookies auto-enabled when `DEBUG=False`), API rate limiting (throttling to prevent abuse / DoS).
 * **Environment-based Configuration**: `SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, and database credentials can all be injected via environment variables; in production (`DEBUG=False`) the app refuses to start if the built-in default key is still in use. See the "Environment Variables & Production Setup" section below.
 * **Docker Support**: Includes Dockerfile and Docker Compose setup to simplify development and deployment.
@@ -61,7 +67,7 @@ With registration, you get more features like click tracking, expiration dates, 
 * **QR Code**: Uses [Segno](https://segno.readthedocs.io/) for QR code generation
 * **OG Parsing**: Uses [metadata_parser](https://github.com/jvanasco/metadata_parser) for Open Graph data parsing
 * **Async Tasks**: Uses [Django-Q2](https://django-q2.readthedocs.io/) to fetch OG data in the background (with PostgreSQL ORM as the broker, no extra Redis required)
-* **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial) (147 test cases, 96% coverage)
+* **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial) (172 test cases, 96% coverage)
 * **Containerization**: [Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 Quick Start (Using Docker, Recommended)
@@ -265,6 +271,8 @@ For the best experience, please visit the **API Documentation (Swagger UI)** at 
 
 ![alt tag](https://cdn.imgpile.com/f/Foa4p5C_md.png)
 
+For programmatic integration (scripts, extensions), prefer a long-lived API Key: after logging in, create a key on the "API Keys" page in the navbar, then call with `Authorization: Bearer sk_...` — no need to handle JWT expiry/refresh.
+
 This project uses [Ninja JWT](https://github.com/twtrubiks/django_ninja_tutorial/tree/main?tab=readme-ov-file#ninja-jwt). First, call `/api/token/pair` with your username and password to get your token.
 
 ![alt tag](https://cdn.imgpile.com/f/84ABFA4_xl.png)
@@ -272,6 +280,17 @@ This project uses [Ninja JWT](https://github.com/twtrubiks/django_ninja_tutorial
 Then, paste the token into the top right corner to authorize your API calls.
 
 ![alt tag](https://cdn.imgpile.com/f/aCbUddW_md.png)
+
+## 🧩 Chrome Extension
+
+The `extension/` directory provides a Chrome extension (Manifest V3, popup-only MVP):
+
+* One-click shorten the "current tab" URL, with the result auto-copied to the clipboard
+* Enter any URL to generate a short link (including a custom slug)
+* Show the 5 most recent links with click counts, one-click copy, and mark expired links
+* Authentication uses a long-lived API Key: after logging in, create a key on the "API Keys" page, then paste it once into the extension's settings page
+
+For installation (load the unpacked extension via developer mode at `chrome://extensions/`) and technical notes, see [extension/README.md](extension/README.md).
 
 ## 📂 Project Structure
 
@@ -285,13 +304,15 @@ django-ninja-shortener/
 ├── manage.py
 ├── requirements.txt
 ├── pytest.ini                # Pytest configuration
+├── extension/                # Chrome extension (Manifest V3, see extension/README.md)
 ├── ninja_shortener/          # Django project configuration
 │   ├── settings.py           # Django settings (JWT, database, app registration)
 │   ├── urls.py               # URL routing configuration
 │   └── api.py                # API integration point (NinjaExtraAPI)
 ├── shortener/                # Core shortener application
-│   ├── models.py             # Database models (Link, LinkPreview)
+│   ├── models.py             # Database models (Link, LinkPreview, ApiKey)
 │   ├── api.py                # Django Ninja API endpoints
+│   ├── auth.py               # Long-lived API Key authentication (used alongside JWT)
 │   ├── views.py              # Page views, redirection, preview-status endpoint
 │   ├── services.py           # Shared business logic (link creation, OG fetch & background task)
 │   ├── utils.py              # Short code generation utility (Sqids)
@@ -308,6 +329,7 @@ django-ninja-shortener/
     ├── templates/            # HTML templates
     │   ├── home.html         # Homepage (short URL creation)
     │   ├── dashboard.html    # Dashboard (user link management, OG preview polling)
+    │   ├── api_keys.html     # API Key management page (create / revoke long-lived keys)
     │   ├── partials/         # Shared partial templates (OG preview card)
     │   └── expired.html      # Expired link page
     ├── static_src/           # Tailwind CSS source files

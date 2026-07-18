@@ -32,6 +32,10 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 
 ![alt tag](https://cdn.imgpile.com/f/igyvV2b_xl.png)
 
+Chrome 擴充套件
+
+![alt tag](https://cdn.imgpile.com/f/XVTnqjC_xl.png)
+
 ## ✨ 功能亮點
 
 * **使用者認證**：支援使用者註冊、登入、登出，使用 JWT 進行 API 認證。
@@ -44,7 +48,9 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 * **QR Code 生成**：為每個短網址生成 QR Code，支援多種尺寸（128/256/512px）和自訂顏色。
 * **個人儀表板**：分頁顯示用戶的所有短網址及其統計資料，支援連結刪除功能。
 * **連結數量限制**：每位登入用戶最多可建立 1000 個連結。
-* **RESTful API**：完整的 API 端點，使用 JWT 認證。
+* **RESTful API**：完整的 API 端點，使用 JWT 或長效 API Key 認證。
+* **API Key（Personal Access Token）**：長效金鑰適合程式化串接與瀏覽器擴充套件（免 JWT 過期換發）；資料庫僅存 SHA-256 雜湊、明文只在建立當下顯示一次，可於網頁「API Keys」頁面建立與撤銷（每人上限 10 把）。
+* **Chrome 瀏覽器擴充套件**：Manifest V3，一鍵縮短當前分頁並自動複製到剪貼簿，支援自訂 slug 與最近連結列表，詳見下方〈Chrome 擴充套件〉一節。
 * **安全防護**：SSRF 防護（解析實際 IP 後以 `ipaddress` 物件化檢查，涵蓋十進位 / hex / octal / IPv6-mapped 等編碼繞過，並對每個重定向目標重新驗證；DNS rebinding 列為已知限制）、OG 抓取回應大小上限（串流讀取並對解壓後位元組設限，防解壓縮炸彈 / 超大 body 撐爆背景 worker）、URL 協議驗證、CSRF 保護、TOCTOU 競態條件防護、生產環境 HTTPS 強化（`DEBUG=False` 時自動啟用 HSTS、HTTPS 轉址與 `Secure` cookie）、API 流量限制（throttling，防濫用 / DoS）。
 * **設定環境變數化**：`SECRET_KEY`、`DEBUG`、`ALLOWED_HOSTS`、資料庫帳密皆可由環境變數注入；生產環境（`DEBUG=False`）若仍沿用內建預設金鑰會直接拒絕啟動。詳見下方〈環境變數與生產環境設定〉一節。
 * **Docker 支援**：提供 Dockerfile 和 Docker Compose 設定，簡化開發與部署流程。
@@ -61,7 +67,7 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 * **QR Code**：使用 [Segno](https://segno.readthedocs.io/) 生成 QR Code
 * **OG 解析**：使用 [metadata_parser](https://github.com/jvanasco/metadata_parser) 解析 Open Graph 資料
 * **非同步任務**：使用 [Django-Q2](https://django-q2.readthedocs.io/) 背景處理 OG 抓取（以 PostgreSQL ORM 作為 broker，免額外的 Redis）
-* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)（147 個測試案例，96% 覆蓋率）
+* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)（172 個測試案例，96% 覆蓋率）
 * **容器化**：[Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 快速啟動 (使用 Docker, 建議用這個)
@@ -257,6 +263,8 @@ API 提供了程式化的方式來與短網址服務互動。所有 API 端點�
 
 ![alt tag](https://cdn.imgpile.com/f/Foa4p5C_md.png)
 
+程式化串接（腳本、擴充套件）建議改用長效 API Key：登入網站後至導覽列「API Keys」頁面建立金鑰，之後以 `Authorization: Bearer sk_...` 呼叫即可，免處理 JWT 過期換發。
+
 使用 [Ninja JWT](https://github.com/twtrubiks/django_ninja_tutorial/tree/main?tab=readme-ov-file#ninja-jwt), 先呼叫 `/api/token/pair` 依照密號密碼, 取得你的 token
 
 ![alt tag](https://cdn.imgpile.com/f/84ABFA4_xl.png)
@@ -264,6 +272,17 @@ API 提供了程式化的方式來與短網址服務互動。所有 API 端點�
 然後把 token 貼到右上角, 就可以呼叫 api 了
 
 ![alt tag](https://cdn.imgpile.com/f/aCbUddW_md.png)
+
+## 🧩 Chrome 擴充套件
+
+`extension/` 目錄提供 Chrome 擴充套件（Manifest V3，popup-only MVP）：
+
+* 一鍵縮短「當前分頁」網址，結果自動複製到剪貼簿
+* 可輸入任意網址生成短網址（含自訂 slug）
+* 顯示最近 5 筆連結與點擊數，可一鍵複製，並標示已過期的連結
+* 認證使用長效 API Key：登入網站後至「API Keys」頁面建立金鑰，在擴充套件設定頁貼一次即可
+
+安裝方式（`chrome://extensions/` 開發人員模式載入未封裝項目）與技術備註詳見 [extension/README.md](extension/README.md)。
 
 ## 📂 專案結構
 
@@ -277,13 +296,15 @@ django-ninja-shortener/
 ├── manage.py
 ├── requirements.txt
 ├── pytest.ini                # Pytest 設定
+├── extension/                # Chrome 擴充套件（Manifest V3，見 extension/README.md）
 ├── ninja_shortener/          # Django 專案設定
 │   ├── settings.py           # Django 設定（JWT、資料庫、應用註冊）
 │   ├── urls.py               # URL 路由配置
 │   └── api.py                # API 整合點（NinjaExtraAPI）
 ├── shortener/                # 核心短網址應用
-│   ├── models.py             # 資料庫模型（Link、LinkPreview）
+│   ├── models.py             # 資料庫模型（Link、LinkPreview、ApiKey）
 │   ├── api.py                # Django Ninja API 端點
+│   ├── auth.py               # 長效 API Key 認證（與 JWT 併用）
 │   ├── views.py              # 頁面視圖、重定向、預覽狀態端點
 │   ├── services.py           # 共用業務邏輯（建立連結、OG 抓取與背景任務）
 │   ├── utils.py              # 短碼生成工具（Sqids）
@@ -300,6 +321,7 @@ django-ninja-shortener/
     ├── templates/            # HTML 模板
     │   ├── home.html         # 首頁（短網址建立）
     │   ├── dashboard.html    # 儀表板（用戶連結管理、OG 預覽輪詢）
+    │   ├── api_keys.html     # API Key 管理頁（建立 / 撤銷長效金鑰）
     │   ├── partials/         # 共用局部模板（OG 預覽卡片）
     │   └── expired.html      # 過期連結頁面
     ├── static_src/           # Tailwind CSS 原始檔
