@@ -15,6 +15,7 @@ from django.utils import timezone
 from django.views import generic
 from ninja.throttling import UserRateThrottle
 
+from .analytics import get_link_stats, record_click
 from .auth import generate_api_key, hash_api_key
 from .models import ApiKey, Link, LinkPreview
 from .services import (
@@ -91,6 +92,10 @@ def redirect_view(request, short_code):
         click_count=F('click_count') + 1,
         last_clicked_at=timezone.now()
     )
+
+    # 匿名連結沒有統計頁可看，不留事件
+    if link.owner_id:
+        record_click(link, request)
 
     return redirect(link.original_url)
 
@@ -222,6 +227,21 @@ def preview_status_view(request, short_code):
         request=request,
     )
     return JsonResponse({'status': status, 'html': html})
+
+
+@login_required
+def link_stats_view(request, short_code):
+    """連結統計頁：近 30 天每日點擊、Top referrers 與裝置分佈（不含 bot）"""
+    link = get_object_or_404(Link, short_code=short_code)
+
+    if link.owner != request.user:
+        messages.error(request, '您沒有權限查看此連結')
+        return redirect('dashboard')
+
+    return render(request, 'stats.html', {
+        'link': link,
+        'stats': get_link_stats(link),
+    })
 
 
 @login_required

@@ -32,6 +32,10 @@ With registration, you get more features like click tracking, expiration dates, 
 
 ![alt tag](https://cdn.imgpile.com/f/igyvV2b_xl.png)
 
+Click Analytics Dashboard (daily click trend over the last 30 days, top referrers, device breakdown)
+
+![alt tag](https://cdn.imgpile.com/f/hJcKXKc_xl.png)
+
 Chrome Extension
 
 ![alt tag](https://cdn.imgpile.com/f/XVTnqjC_xl.png)
@@ -44,6 +48,7 @@ Chrome Extension
 * **Short URL Expiration**: Set expiration time for short URLs (1 hour, 1 day, 7 days, 30 days, or permanent).
 * **Short URL Redirection**: Clicking a short URL redirects the user to the original long URL, using atomic updates to prevent race conditions.
 * **Click Tracking**: The system automatically counts the number of clicks for each short URL.
+* **Click Analytics**: Each link has a dedicated stats page with a daily click line chart over the last 30 days (day boundaries in the Taipei timezone), top referrer domains, and a device breakdown (bots are categorized separately and excluded from the chart). Privacy-friendly design: **no IP addresses or raw User-Agent strings are stored**, referrers keep only the domain; events are retained for 90 days and cleaned up daily by a Django-Q schedule, while the all-time total click count is still kept in `click_count`.
 * **Open Graph Preview**: Fetches OG data (title, description, image) from target pages **asynchronously** via a Django-Q background worker, so creating a short URL is never blocked by a slow target site; the dashboard shows a skeleton loader and auto-polls for updates, with manual re-fetch support.
 * **QR Code Generation**: Generate QR codes for each short URL, supporting multiple sizes (128/256/512px) and custom colors.
 * **Personal Dashboard**: Paginated display of all user's short URLs and statistics, with link deletion support.
@@ -67,7 +72,9 @@ Chrome Extension
 * **QR Code**: Uses [Segno](https://segno.readthedocs.io/) for QR code generation
 * **OG Parsing**: Uses [metadata_parser](https://github.com/jvanasco/metadata_parser) for Open Graph data parsing
 * **Async Tasks**: Uses [Django-Q2](https://django-q2.readthedocs.io/) to fetch OG data in the background (with PostgreSQL ORM as the broker, no extra Redis required)
-* **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial) (172 test cases, 96% coverage)
+* **Click Charts**: Uses [Chart.js](https://www.chartjs.org/) to render the daily click line chart (bundled locally with the project, no CDN dependency)
+* **UA Parsing**: Uses [ua-parser](https://github.com/ua-parser/uap-python) to parse device / browser / OS and detect bots
+* **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial) (202 test cases, 97% coverage)
 * **Containerization**: [Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 Quick Start (Using Docker, Recommended)
@@ -310,11 +317,13 @@ django-ninja-shortener/
 │   ├── urls.py               # URL routing configuration
 │   └── api.py                # API integration point (NinjaExtraAPI)
 ├── shortener/                # Core shortener application
-│   ├── models.py             # Database models (Link, LinkPreview, ApiKey)
+│   ├── models.py             # Database models (Link, LinkPreview, ApiKey, ClickEvent)
 │   ├── api.py                # Django Ninja API endpoints
 │   ├── auth.py               # Long-lived API Key authentication (used alongside JWT)
+│   ├── ownership.py          # Owner permission checks (shared by views and API)
 │   ├── views.py              # Page views, redirection, preview-status endpoint
 │   ├── services.py           # Shared business logic (link creation, OG fetch & background task)
+│   ├── analytics.py          # Click event recording & stats aggregation (trend / referrers / devices)
 │   ├── utils.py              # Short code generation utility (Sqids)
 │   ├── validators.py         # Validators (URL, custom slug)
 │   ├── og_parser.py          # Open Graph data fetching (with SSRF protection, response size cap)
@@ -329,6 +338,7 @@ django-ninja-shortener/
     ├── templates/            # HTML templates
     │   ├── home.html         # Homepage (short URL creation)
     │   ├── dashboard.html    # Dashboard (user link management, OG preview polling)
+    │   ├── stats.html        # Link stats page (click trend / referrers / device breakdown)
     │   ├── api_keys.html     # API Key management page (create / revoke long-lived keys)
     │   ├── partials/         # Shared partial templates (OG preview card)
     │   └── expired.html      # Expired link page
@@ -339,7 +349,7 @@ django-ninja-shortener/
 ## 💡 Future Roadmap
 
 * **Switch to PostgreSQL**: Prepare a more robust database for production. ✅ Completed
-* **Detailed Analytics Dashboard**: Provide more click data, such as time, source, geolocation, etc.
+* **Detailed Analytics Dashboard**: Provide more click data, such as time, source, geolocation, etc. ✅ Completed (daily trend over the last 30 days, top referrers, device breakdown; geolocation not yet implemented)
 * **Custom Short URLs**: Allow users to customize the short code for their URLs. ✅ Completed
 * **QR Code Generation**: Generate a QR code for each short URL. ✅ Completed
 * **Asynchronous OG Fetching**: Make Open Graph data fetching asynchronous (Django-Q2, with PostgreSQL as the broker) to avoid blocking API requests. ✅ Completed

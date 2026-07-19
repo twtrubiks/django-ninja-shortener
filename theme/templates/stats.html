@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="bg-white p-6 sm:p-8 rounded-xl shadow-lg border border-purple-100 animate-fade-in-up">
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <div class="flex-1 min-w-0">
+      <h2 class="text-2xl font-bold text-purple-800">點擊統計</h2>
+      <div class="text-sm text-gray-600 mt-1">
+        短網址：
+        <a href="{{ request.scheme }}://{{ request.get_host }}/{{ link.short_code }}"
+           target="_blank" class="text-purple-600 hover:underline focus-ring rounded">
+          {{ request.scheme }}://{{ request.get_host }}/{{ link.short_code }}
+        </a>
+      </div>
+      <div class="text-sm text-gray-600 mt-0.5 truncate" title="{{ link.original_url }}">
+        目的地：{{ link.original_url|truncatechars:80 }}
+      </div>
+    </div>
+    <a href="{% url 'dashboard' %}"
+       class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 px-4 rounded-lg transition-colors cursor-pointer focus-ring btn-press inline-flex items-center gap-2 shrink-0">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+      </svg>
+      返回儀表板
+    </a>
+  </div>
+
+  <!-- Summary tiles -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+    <div class="bg-purple-50 border border-purple-100 rounded-xl p-4">
+      <div class="text-sm text-gray-600">近 {{ stats.days }} 天點擊</div>
+      <div class="text-3xl font-bold text-purple-800 mt-1">{{ stats.total_clicks }}</div>
+    </div>
+    <div class="bg-gray-50 border border-gray-200 rounded-xl p-4">
+      <div class="text-sm text-gray-600">爬蟲點擊（不計入圖表）</div>
+      <div class="text-3xl font-bold text-gray-700 mt-1">{{ stats.bot_clicks }}</div>
+    </div>
+    <div class="bg-gray-50 border border-gray-200 rounded-xl p-4">
+      <div class="text-sm text-gray-600">最後點擊時間</div>
+      <div class="text-lg font-semibold text-gray-800 mt-2">
+        {% if link.last_clicked_at %}{{ link.last_clicked_at|date:"Y-m-d H:i" }}{% else %}尚無點擊{% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if stats.total_clicks %}
+  <!-- Daily clicks line chart -->
+  <div class="mb-8">
+    <h3 class="text-lg font-semibold text-gray-800 mb-3">每日點擊</h3>
+    <div class="relative h-64 sm:h-72">
+      <canvas id="clicks-chart" role="img"
+              aria-label="近 {{ stats.days }} 天每日點擊折線圖，共 {{ stats.total_clicks }} 次點擊"></canvas>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <!-- Top referrers -->
+    <div>
+      <h3 class="text-lg font-semibold text-gray-800 mb-3">Top 來源</h3>
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-gray-500 border-b border-gray-200">
+            <th class="py-2 font-medium">來源網域</th>
+            <th class="py-2 font-medium text-right w-20">點擊</th>
+            <th class="py-2 font-medium text-right w-16">占比</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in stats.referrers %}
+          <tr class="border-b border-gray-100">
+            <td class="py-2 text-gray-800 break-all">{{ r.domain }}</td>
+            <td class="py-2 text-right text-gray-700">{{ r.clicks }}</td>
+            <td class="py-2 text-right text-gray-500">{% widthratio r.clicks stats.total_clicks 100 %}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Devices -->
+    <div>
+      <h3 class="text-lg font-semibold text-gray-800 mb-3">裝置分佈</h3>
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-gray-500 border-b border-gray-200">
+            <th class="py-2 font-medium">裝置</th>
+            <th class="py-2 font-medium text-right w-20">點擊</th>
+            <th class="py-2 font-medium text-right w-16">占比</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in stats.devices %}
+          <tr class="border-b border-gray-100">
+            <td class="py-2 text-gray-800">{{ d.label }}</td>
+            <td class="py-2 text-right text-gray-700">{{ d.clicks }}</td>
+            <td class="py-2 text-right text-gray-500">{% widthratio d.clicks stats.total_clicks 100 %}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="text-center py-10">
+    <p class="text-gray-600">近 {{ stats.days }} 天尚無點擊資料，分享你的短網址後再回來看看吧！</p>
+  </div>
+  {% endif %}
+</div>
+
+{% if stats.total_clicks %}
+{{ stats.timeseries|json_script:"timeseries-data" }}
+<script src="{% static 'js/chart.umd.js' %}"></script>
+<script>
+(function () {
+  const points = JSON.parse(document.getElementById('timeseries-data').textContent);
+  const ctx = document.getElementById('clicks-chart');
+  if (!ctx || typeof Chart === 'undefined') return;
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: points.map(p => p.date.slice(5)),  // 軸上只顯示 MM-DD，完整日期在 tooltip
+      datasets: [{
+        data: points.map(p => p.clicks),
+        borderColor: '#7c3aed',
+        backgroundColor: 'rgba(124, 58, 237, 0.08)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        pointHitRadius: 12,
+        pointHoverRadius: 4,
+        pointHoverBackgroundColor: '#7c3aed',
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => points[items[0].dataIndex].date,
+            label: (item) => `點擊：${item.parsed.y}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: '#6b7280', maxTicksLimit: 8, maxRotation: 0 },
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: '#f3f4f6' },
+          ticks: { color: '#6b7280', precision: 0 },
+        },
+      },
+    },
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -32,6 +32,10 @@ Django、Django Ninja 和 Tailwind CSS 打造的現代化短網址服務，其�
 
 ![alt tag](https://cdn.imgpile.com/f/igyvV2b_xl.png)
 
+點擊統計 Dashboard（近 30 天每日點擊趨勢、Top 來源、裝置分佈）
+
+![alt tag](https://cdn.imgpile.com/f/hJcKXKc_xl.png)
+
 Chrome 擴充套件
 
 ![alt tag](https://cdn.imgpile.com/f/XVTnqjC_xl.png)
@@ -44,6 +48,7 @@ Chrome 擴充套件
 * **短網址過期機制**：可設定短網址過期時間（1 小時、1 天、7 天、30 天或永久）。
 * **短網址重定向**：點擊短網址會將使用者重新導向至原始的長網址，使用原子性更新防止競態條件。
 * **點擊次數追蹤**：系統會自動計算每個短網址被點擊的次數。
+* **點擊分析（Click Analytics）**：每個連結有專屬統計頁，含近 30 天每日點擊折線圖（台北時區切日）、Top 來源網域與裝置分佈（bot 獨立歸類且不計入圖表）。隱私友善設計：**不記錄 IP 與原始 User-Agent**，referrer 只保留網域；事件保留 90 天，由 Django-Q 每日排程清理，永久總點擊數仍由 `click_count` 保管。
 * **Open Graph 預覽**：以 Django-Q 背景**非同步**抓取目標網頁的 OG 資料（標題、描述、圖片），建立短網址不被目標網站拖慢；儀表板顯示骨架載入並自動輪詢更新，亦支援手動重新抓取。
 * **QR Code 生成**：為每個短網址生成 QR Code，支援多種尺寸（128/256/512px）和自訂顏色。
 * **個人儀表板**：分頁顯示用戶的所有短網址及其統計資料，支援連結刪除功能。
@@ -67,7 +72,9 @@ Chrome 擴充套件
 * **QR Code**：使用 [Segno](https://segno.readthedocs.io/) 生成 QR Code
 * **OG 解析**：使用 [metadata_parser](https://github.com/jvanasco/metadata_parser) 解析 Open Graph 資料
 * **非同步任務**：使用 [Django-Q2](https://django-q2.readthedocs.io/) 背景處理 OG 抓取（以 PostgreSQL ORM 作為 broker，免額外的 Redis）
-* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)（172 個測試案例，96% 覆蓋率）
+* **點擊圖表**：使用 [Chart.js](https://www.chartjs.org/) 繪製每日點擊折線圖（隨專案提供本地檔案，無 CDN 依賴）
+* **UA 解析**：使用 [ua-parser](https://github.com/ua-parser/uap-python) 解析裝置 / 瀏覽器 / OS 與 bot 判定
+* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)（202 個測試案例，97% 覆蓋率）
 * **容器化**：[Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 快速啟動 (使用 Docker, 建議用這個)
@@ -302,11 +309,13 @@ django-ninja-shortener/
 │   ├── urls.py               # URL 路由配置
 │   └── api.py                # API 整合點（NinjaExtraAPI）
 ├── shortener/                # 核心短網址應用
-│   ├── models.py             # 資料庫模型（Link、LinkPreview、ApiKey）
+│   ├── models.py             # 資料庫模型（Link、LinkPreview、ApiKey、ClickEvent）
 │   ├── api.py                # Django Ninja API 端點
 │   ├── auth.py               # 長效 API Key 認證（與 JWT 併用）
+│   ├── ownership.py          # 擁有者權限檢查（views 與 API 共用）
 │   ├── views.py              # 頁面視圖、重定向、預覽狀態端點
 │   ├── services.py           # 共用業務邏輯（建立連結、OG 抓取與背景任務）
+│   ├── analytics.py          # 點擊事件記錄與統計彙整（趨勢 / 來源 / 裝置）
 │   ├── utils.py              # 短碼生成工具（Sqids）
 │   ├── validators.py         # 驗證器（URL、自訂 slug）
 │   ├── og_parser.py          # Open Graph 資料抓取（含 SSRF 防護、回應大小上限）
@@ -321,6 +330,7 @@ django-ninja-shortener/
     ├── templates/            # HTML 模板
     │   ├── home.html         # 首頁（短網址建立）
     │   ├── dashboard.html    # 儀表板（用戶連結管理、OG 預覽輪詢）
+    │   ├── stats.html        # 連結統計頁（點擊趨勢 / 來源 / 裝置分佈）
     │   ├── api_keys.html     # API Key 管理頁（建立 / 撤銷長效金鑰）
     │   ├── partials/         # 共用局部模板（OG 預覽卡片）
     │   └── expired.html      # 過期連結頁面
@@ -331,7 +341,7 @@ django-ninja-shortener/
 ## 💡 未來展望
 
 * **切換至 PostgreSQL**：為生產環境準備更穩健的資料庫。✅ 已完成
-* **詳細的分析儀表板**：提供更多點擊數據，如時間、來源、地理位置等。
+* **詳細的分析儀表板**：提供更多點擊數據，如時間、來源、地理位置等。✅ 已完成（近 30 天每日趨勢、Top 來源、裝置分佈；地理位置尚未實作）
 * **自訂短網址**：允許使用者自訂短網址的代碼。✅ 已完成
 * **QR Code 產生**：為每個短網址產生對應的 QR Code。✅ 已完成
 * **OG 抓取異步化**：將 Open Graph 資料抓取改為異步處理（Django-Q2，以 PostgreSQL 為 broker），避免阻塞 API 請求。✅ 已完成

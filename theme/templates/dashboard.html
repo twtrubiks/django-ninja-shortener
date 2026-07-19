@@ -68,6 +68,14 @@
                   </svg>
                   <span class="hidden sm:inline">複製</span>
                 </button>
+                <a href="{% url 'link_stats' link.short_code %}"
+                   class="min-h-[44px] min-w-[44px] sm:min-w-0 bg-blue-100 hover:bg-blue-200 text-blue-700 py-2 px-3 rounded-lg transition-colors cursor-pointer focus-ring btn-press inline-flex items-center justify-center gap-1"
+                   title="點擊統計">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                  </svg>
+                  <span class="hidden sm:inline">統計</span>
+                </a>
                 {% if not link.is_expired %}
                 <button onclick="showQRModal('{{ link.short_code }}')"
                         class="min-h-[44px] min-w-[44px] sm:min-w-0 bg-purple-100 hover:bg-purple-200 text-purple-700 py-2 px-3 rounded-lg transition-colors cursor-pointer focus-ring btn-press inline-flex items-center justify-center gap-1"

@@ -35,6 +35,32 @@ class Link(models.Model):
         return self.expires_at < timezone.now()
 
 
+class ClickEvent(models.Model):
+    """單次點擊事件（近 90 天的分析明細）。
+
+    隱私：不儲存 IP 與原始 User-Agent，只留解析後欄位。
+    永久總點擊數由 Link.click_count 保管；本表由每日排程清理過期事件
+    （見 services.cleanup_old_click_events），兩者數字本來就不要求一致。
+    """
+
+    link = models.ForeignKey(Link, on_delete=models.CASCADE, related_name='click_events')
+    # default 而非 auto_now_add：讓測試與回填可以指定歷史時間
+    clicked_at = models.DateTimeField(default=timezone.now)
+    referrer_domain = models.CharField(max_length=200, blank=True, default='')
+    device = models.CharField(max_length=20, blank=True, default='')  # desktop / mobile / tablet / bot / other
+    browser = models.CharField(max_length=50, blank=True, default='')
+    os = models.CharField(max_length=50, blank=True, default='')
+    is_bot = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['link', '-clicked_at']),
+        ]
+
+    def __str__(self):
+        return f'Click on {self.link.short_code} at {self.clicked_at:%Y-%m-%d %H:%M}'
+
+
 class ApiKey(models.Model):
     """長效 API Key（Personal Access Token），供程式化串接與瀏覽器擴充套件使用。
 

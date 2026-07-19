@@ -6,6 +6,7 @@
 那些屬於各自呼叫端（api.py / views.py）的邊界責任。
 """
 
+from datetime import timedelta
 from typing import Optional
 
 from django.contrib.auth.models import User
@@ -13,7 +14,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django_q.tasks import async_task
 
-from .models import Link, LinkPreview
+from .models import ClickEvent, Link, LinkPreview
 from .og_parser import OGParserError, fetch_og_data
 from .utils import generate_short_code_from_id
 
@@ -164,3 +165,22 @@ def run_preview_fetch(link_id: int) -> None:
         return
 
     fetch_and_save_preview(link)
+
+
+# 點擊事件保留天數：轉址是無限流的公開端點，事件表若無清理會無上限增長
+CLICK_EVENT_RETENTION_DAYS = 90
+
+
+def cleanup_old_click_events() -> int:
+    """
+    Django-Q 每日排程任務：刪除超過保留期的點擊事件（排程由 migration 0010 建立）。
+
+    放在 services 而非 analytics：qcluster 匯入本模組即可執行，
+    不需載入 analytics 的 ua_parser 相依。
+
+    Returns:
+        刪除的事件數量
+    """
+    cutoff = timezone.now() - timedelta(days=CLICK_EVENT_RETENTION_DAYS)
+    deleted_count, _ = ClickEvent.objects.filter(clicked_at__lt=cutoff).delete()
+    return deleted_count

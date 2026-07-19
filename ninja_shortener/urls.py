@@ -40,6 +40,7 @@ urlpatterns = [
     path('links/<str:short_code>/refresh/', shortener_views.refresh_preview_view, name='refresh_preview'),
     path('links/<str:short_code>/preview-status/', shortener_views.preview_status_view, name='preview_status'),
     path('links/<str:short_code>/delete/', shortener_views.delete_link_view, name='delete_link'),
+    path('links/<str:short_code>/stats/', shortener_views.link_stats_view, name='link_stats'),
 
     # API Key 管理
     path('settings/api-keys/', shortener_views.api_keys_view, name='api_keys'),
