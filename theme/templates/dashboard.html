@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load short_urls %}
 
 {% block content %}
 <div class="bg-white p-6 sm:p-8 rounded-xl shadow-lg border border-purple-100 animate-fade-in-up">
@@ -32,9 +33,9 @@
               </a>
               <div class="text-sm text-gray-600 mt-1">
                 短網址：
-                <a href="{{ request.scheme }}://{{ request.get_host }}/{{ link.short_code }}"
+                <a href="{% short_url link %}"
                    target="_blank" class="text-purple-600 hover:underline focus-ring rounded">
-                  {{ request.scheme }}://{{ request.get_host }}/{{ link.short_code }}
+                  {% short_url link %}
                 </a>
               </div>
             </div>
@@ -60,7 +61,7 @@
 
               <!-- Action buttons -->
               <div class="flex items-center gap-2 ml-auto lg:ml-0">
-                <button onclick="copyToClipboard('{{ request.scheme }}://{{ request.get_host }}/{{ link.short_code }}')"
+                <button onclick="copyToClipboard('{% short_url link %}')"
                         class="min-h-[44px] min-w-[44px] sm:min-w-0 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-3 rounded-lg transition-colors cursor-pointer focus-ring btn-press inline-flex items-center justify-center gap-1"
                         title="複製連結">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

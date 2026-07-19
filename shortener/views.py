@@ -18,6 +18,7 @@ from ninja.throttling import UserRateThrottle
 from .analytics import get_link_stats, record_click
 from .auth import generate_api_key, hash_api_key
 from .models import ApiKey, Link, LinkPreview
+from .ownership import get_owned_link_or_403, get_owned_link_or_redirect
 from .services import (
     ShortCodeGenerationError,
     SlugAlreadyExistsError,
@@ -186,12 +187,9 @@ class RegisterView(generic.CreateView):
 @login_required
 def refresh_preview_view(request, short_code):
     """手動將 OG 預覽重新排入背景抓取"""
-    link = get_object_or_404(Link, short_code=short_code)
-
-    # 權限檢查
-    if link.owner != request.user:
-        messages.error(request, '您沒有權限操作此連結')
-        return redirect('dashboard')
+    link, error = get_owned_link_or_redirect(request, short_code, '操作')
+    if error:
+        return error
 
     # 重新排入背景抓取（前端會輪詢骨架直到完成）
     enqueue_preview_fetch(link)
@@ -208,13 +206,12 @@ def preview_status_view(request, short_code):
     - 需登入且為連結擁有者
     - 回傳 {status, html}；html 是與 dashboard 共用的 _preview_card 局部模板
     """
-    link = get_object_or_404(
-        Link.objects.select_related('preview'),
-        short_code=short_code,
+    link, error = get_owned_link_or_403(
+        request, short_code, '查看',
+        queryset=Link.objects.select_related('preview'),
     )
-
-    if link.owner != request.user:
-        return JsonResponse({'detail': '您沒有權限查看此連結'}, status=403)
+    if error:
+        return error
 
     try:
         status = link.preview.fetch_status
@@ -232,11 +229,9 @@ def preview_status_view(request, short_code):
 @login_required
 def link_stats_view(request, short_code):
     """連結統計頁：近 30 天每日點擊、Top referrers 與裝置分佈（不含 bot）"""
-    link = get_object_or_404(Link, short_code=short_code)
-
-    if link.owner != request.user:
-        messages.error(request, '您沒有權限查看此連結')
-        return redirect('dashboard')
+    link, error = get_owned_link_or_redirect(request, short_code, '查看')
+    if error:
+        return error
 
     return render(request, 'stats.html', {
         'link': link,
@@ -303,12 +298,9 @@ def delete_link_view(request, short_code):
     if request.method != 'POST':
         return redirect('dashboard')
 
-    link = get_object_or_404(Link, short_code=short_code)
-
-    # 權限檢查
-    if link.owner != request.user:
-        messages.error(request, '您沒有權限刪除此連結')
-        return redirect('dashboard')
+    link, error = get_owned_link_or_redirect(request, short_code, '刪除')
+    if error:
+        return error
 
     link.delete()
     messages.success(request, '連結已成功刪除')

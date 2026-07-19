@@ -29,3 +29,12 @@ def decode_short_code(short_code: str) -> int | None:
     """
     numbers = _sqids.decode(short_code)
     return numbers[0] if numbers else None
+
+
+def build_short_url(request, short_code: str) -> str:
+    """
+    組出完整短網址（scheme://host/code）。
+
+    模板 tag 與 API 共用的單一來源。
+    """
+    return f'{request.scheme}://{request.get_host()}/{short_code}'

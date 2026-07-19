@@ -11,6 +11,7 @@ from pydantic import HttpUrl, field_validator
 
 from .auth import ApiKeyOrJWTAuth
 from .models import Link, LinkPreview
+from .ownership import get_owned_link_or_403
 from .qr_utils import generate_qr_code
 from .services import (
     ShortCodeGenerationError,
@@ -18,6 +19,7 @@ from .services import (
     create_short_link,
     enqueue_preview_fetch,
 )
+from .utils import build_short_url
 from .validators import MAX_URL_LENGTH, validate_custom_slug
 
 router = Router(tags=['shorteners'])
@@ -241,11 +243,9 @@ def refresh_link_preview(request, short_code: str):
     - 只有連結擁有者可以重新抓取
     - 立即把 preview 設為 pending 並回應，實際抓取由背景 worker 執行
     """
-    link = get_object_or_404(Link, short_code=short_code)
-
-    # 權限檢查：只有擁有者可以刷新
-    if link.owner != request.user:
-        return JsonResponse({'detail': '您沒有權限操作此連結'}, status=403)
+    link, error = get_owned_link_or_403(request, short_code, '操作')
+    if error:
+        return error
 
     # 重新排入背景抓取（覆蓋為 pending）
     enqueue_preview_fetch(link)
@@ -295,13 +295,12 @@ def get_link_detail(request, short_code: str):
     - 需要 JWT 認證
     - 只有連結擁有者可以查看
     """
-    link = get_object_or_404(
-        Link.objects.select_related('preview'),
-        short_code=short_code,
+    link, error = get_owned_link_or_403(
+        request, short_code, '查看',
+        queryset=Link.objects.select_related('preview'),
     )
-
-    if link.owner != request.user:
-        return JsonResponse({'detail': '您沒有權限查看此連結'}, status=403)
+    if error:
+        return error
 
     return _link_to_response(link)
 
@@ -320,7 +319,7 @@ def get_qr_code(request, short_code: str, params: QRCodeParams = Query(...)):
     if link.is_expired:
         return JsonResponse({'detail': '連結已過期'}, status=410)
 
-    full_url = f"{request.scheme}://{request.get_host()}/{short_code}"
+    full_url = build_short_url(request, short_code)
     buffer = generate_qr_code(
         url=full_url,
         size=params.size,
@@ -382,11 +381,9 @@ def delete_link(request, short_code: str):
     - 需要 JWT 認證
     - 只有連結擁有者可以刪除
     """
-    link = get_object_or_404(Link, short_code=short_code)
-
-    # 權限檢查：只有擁有者可以刪除
-    if link.owner != request.user:
-        return JsonResponse({'detail': '您沒有權限刪除此連結'}, status=403)
+    link, error = get_owned_link_or_403(request, short_code, '刪除')
+    if error:
+        return error
 
     link.delete()
     return Status(200, {'detail': '連結已成功刪除', 'short_code': short_code})
