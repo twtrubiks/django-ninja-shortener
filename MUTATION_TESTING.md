@@ -7,22 +7,25 @@
 
 ## 摘要
 
-| | 補測試前 | 補測試後 |
+| | 補測試前（第一輪） | 補測試 + 修正後（最終） |
 | --- | ---: | ---: |
-| 測試案例 | 202 | 423 |
+| 測試案例 | 202 | 445 |
 | 行覆蓋率（應用程式碼，不含測試 / migration） | 92% | 97% |
-| 變異體 | 2,435 | 2,435（同一組） |
-| 殺死 | 1,648 | 2,273 |
-| 存活 | 787 | 162 |
+| 變異體 | 2,435 | 2,446 |
+| 殺死 | 1,648 | 2,283 |
+| 存活 | 787 | 163 |
 | **變異分數** | **67.7%** | **93.3%** |
+
+最終一輪多出的 11 個變異體來自修正程式問題時新增的程式碼（見文末）。
+補測試後、修正前也以同一組 2,435 個變異體重跑過一次，分數為 93.3%（殺死 2,273、存活 162）。
 
 - 原本覆蓋率看起來不低（README 標示 97%，只算應用程式碼為 92%），變異分數卻只有 67.7%：
   有 787 處「改壞了也沒有測試會發現」。
 - 其中最嚴重的是**權限類**缺口：`/api/check-slug` 拿掉認證、三個網頁 view 拿掉
   `@login_required`、JWT 取 token 的端點整個沒註冊，現有測試全都不會失敗。
-- 補了 221 個測試後剩下的 162 個存活者已逐一判讀，全部屬於等價變異、
+- 補了 243 個測試、修正 3 個程式問題後，剩下的 163 個存活者已逐一判讀，全部屬於等價變異、
   測試環境下無法區分的設定預設值、效能 / 文件 / 日誌類，或刻意不鎖死的可調參數（見〈剩餘存活者〉）。
-- 過程中另外發現 **3 個程式問題**（未修改，見〈發現的程式問題〉）。
+- 過程中另外發現 **3 個程式問題**，已一併修正（見〈發現並已修正的程式問題〉）。
 
 ## 範圍
 
@@ -49,7 +52,7 @@ ninja_shortener/  api.py  urls.py
 - pydantic `@field_validator`、Model 的 `@property`
 - Schema / Model 欄位定義、模組常數
 
-本次 2,435 個變異體中有 1,366 個（56%）位於 mutmut 不會變異的區域；第一輪 787 個存活者有 468 個落在這裡，
+第一輪 2,435 個變異體中有 1,366 個（56%）位於 mutmut 不會變異的區域；第一輪 787 個存活者有 468 個落在這裡，
 上述權限類缺口全在其中。因此改用自建的
 [`scripts/mutation/mutation_test.py`](scripts/mutation/mutation_test.py)：沿用 mutmut 3.8 的變異運算子，
 但變異整個檔案，並加上四種對 Django 專案特別重要的運算子。
@@ -78,10 +81,10 @@ ninja_shortener/  api.py  urls.py
 - 12 個平行 worker，各自一份專案副本與獨立的 Postgres 測試庫（`--reuse-db`）。
 - 先以 `--cov-context=test` 記錄每一行被哪些測試執行到。函式主體內的變異只跑相關測試；
   模組 / 類別層的變異（import 時就生效）跑全套。
-- 只跑部分測試就存活的變異體，最後**一律用全套測試複驗**。兩輪分別複驗了 341 個與 99 個，
+- 只跑部分測試就存活的變異體，最後**一律用全套測試複驗**。三輪分別複驗了 341、99、100 個，
   結果全部仍然存活 —— 測試挑選沒有造成任何假存活。
 - 測試改用 MD5 密碼雜湊加速（`create_user` 是原本測試時間的大宗），不影響被測邏輯。
-- 補測試前後兩輪使用同一組 2,435 個變異體（逐一比對內容相同），分數可直接比較。
+- 補測試前後各跑一輪；兩者在未改動原始碼的部分使用相同的變異體（逐一比對內容相同），分數可直接比較。
 
 重跑方式見 [scripts/mutation/README.md](scripts/mutation/README.md)。
 
@@ -89,41 +92,41 @@ ninja_shortener/  api.py  urls.py
 
 ### 各檔案
 
-| 檔案 | 變異體 | 補測試前 | 補測試後 |
+| 檔案 | 變異體（第一輪 → 最終） | 補測試前 | 最終 |
 | --- | ---: | ---: | ---: |
-| `shortener/views.py` | 556 | 67.4% | **93.5%** |
+| `shortener/views.py` | 556 → 558 | 67.4% | **93.5%** |
 | `shortener/api.py` | 443 | 82.8% | **91.6%** |
-| `shortener/og_parser.py` | 379 | 54.9% | **87.3%** |
+| `shortener/og_parser.py` | 379 → 381 | 54.9% | **87.1%** |
 | `shortener/analytics.py` | 321 | 67.6% | **96.9%** |
 | `shortener/models.py` | 291 | 48.1% | **99.7%** |
 | `ninja_shortener/urls.py` | 171 | 76.0% | **94.2%** |
 | `shortener/services.py` | 88 | 83.0% | **95.5%** |
-| `shortener/validators.py` | 48 | 68.8% | **95.8%** |
+| `shortener/validators.py` | 48 → 55 | 68.8% | **96.4%** |
 | `shortener/qr_utils.py` | 37 | 45.9% | **81.1%** |
 | `shortener/ownership.py` | 36 | 91.7% | **97.2%** |
 | `shortener/auth.py` | 30 | 90.0% | **93.3%** |
 | `shortener/utils.py` | 12 | 91.7% | **91.7%** |
 | `ninja_shortener/api.py` | 12 | 66.7% | **75.0%** |
 | `shortener/templatetags/short_urls.py` | 11 | 81.8% | **100.0%** |
-| **合計** | **2435** | **67.7%** | **93.3%** |
+| **合計** | **2,435 → 2,446** | **67.7%** | **93.3%** |
 
 ### 各運算子
 
-| 運算子 | 變異體 | 補測試前 | 補測試後 |
+| 運算子 | 變異體（第一輪 → 最終） | 補測試前 | 最終 |
 | --- | ---: | ---: | ---: |
-| arg_removal | 972 | 68.4% | **92.9%** |
-| string | 715 | 62.7% | **94.4%** |
-| assignment | 214 | 90.7% | **97.7%** |
+| arg_removal | 972 → 978 | 68.4% | **92.9%** |
+| string | 715 → 716 | 62.7% | **94.4%** |
+| assignment | 214 → 215 | 90.7% | **97.7%** |
 | number | 99 | 32.3% | **81.8%** |
 | return_none | 97 | 79.4% | **99.0%** |
 | if_negate | 68 | 92.6% | **97.1%** |
-| swap_op | 67 | 67.2% | **91.0%** |
+| swap_op | 67 → 68 | 67.2% | **89.7%** |
 | name | 51 | 33.3% | **92.2%** |
-| stmt_delete | 47 | 68.1% | **97.9%** |
+| stmt_delete | 47 → 48 | 68.1% | **97.9%** |
 | if_exp | 36 | 50.0% | **69.4%** |
 | keywords | 28 | 96.4% | **100.0%** |
 | decorator_remove | 27 | 70.4% | **85.2%** |
-| remove_unary_ops | 8 | 100.0% | **100.0%** |
+| remove_unary_ops | 8 → 9 | 100.0% | **100.0%** |
 | symmetric_string_methods_swap | 4 | 75.0% | **100.0%** |
 | augmented_assignment | 2 | 0.0% | **50.0%** |
 
@@ -194,11 +197,11 @@ ninja_shortener/  api.py  urls.py
 
 ## 剩餘存活者
 
-最終仍有 162 個存活者，已逐一判讀並分類如下（完整清單與 diff 由工具產生的 `report.md` 提供）：
+最終仍有 163 個存活者，已逐一判讀並分類如下（完整清單與 diff 由工具產生的 `report.md` 提供）：
 
 | 類別 | 數量 | 說明 / 例子 |
 | --- | ---: | --- |
-| 等價變異（逐條判讀） | 67 | 程式行為完全相同，不可能被任何測試殺死。例：`Paginator.get_page(None)` 與 `get_page(1)` 相同；segno 不分大小寫解析色碼；Python 3.13 中 loopback / link-local 位址同時也是 `is_private` |
+| 等價變異（逐條判讀） | 67 | 程式行為完全相同，不可能被任何測試殺死。例：`Paginator.get_page(None)` 與 `get_page(1)` 相同；segno 不分大小寫解析色碼；`_safe_get_from_metadata` 對空 list 取 `[0]` 拋出的例外會被 except 接住 |
 | 測試環境下等價：settings 已定義，getattr 預設值不會被用到 | 36 | `getattr(settings, 'USER_MAX_LINKS', 1000)` 的 `1000` 改成別的值：settings 已定義此值，預設值只在設定缺漏時才會用到。其中限流速率的設定鍵名若打錯，會退回與 settings 預設相同的值，只有在用環境變數改過速率時才看得出差別；限流器在 import 時就建立，測試無法於執行期替換設定來區分 |
 | API 文件 / 回應 schema（OpenAPI 呈現，行為等價） | 15 | `Router(tags=...)`、`response=Schema` 只影響 OpenAPI 文件與序列化方式，回應內容相同；pydantic 會自動把 `@field_validator` 包成 classmethod |
 | 開發環境專用（DEBUG static、__reload__、未使用的 urls_namespace） | 13 | `if settings.DEBUG:` 的靜態檔路由、`django_browser_reload` 路徑、程式中沒有用到的 `urls_namespace` |
@@ -206,12 +209,15 @@ ninja_shortener/  api.py  urls.py
 | 效能（select_related / queryset 只影響查詢次數） | 8 | `select_related('preview')` 拿掉後結果相同、只是多查詢。列表與 dashboard 已用「查詢數不隨筆數增加」測試保護，單筆查詢（詳情頁、API Key 認證）多一次查詢屬可接受 |
 | 只影響日誌或內部旗標（truncated、chunk_size） | 7 | `_read_capped_body` 的 `truncated` 旗標只決定是否寫 log；`chunk_size` 只影響分塊大小 |
 | 可調參數（測試刻意引用常數，改值屬設定調整而非錯誤） | 6 | `MAX_REDIRECTS`、`MAX_RESPONSE_BYTES`、`DASHBOARD_ITEMS_PER_PAGE`、`Sqids(min_length=8)`。測試引用常數本身，改值時測試跟著調整——這是刻意的，避免測試變成鎖死設定值的「變更偵測器」 |
+| 防禦縱深：is_global 兜底後，個別 IP 條件互相涵蓋 | 1 | 修正 SSRF 時加上的 `or not ip.is_global` 會擋下所有非公網位址，於是 `is_private`、`is_reserved` 等個別條件被改壞時仍會由它兜底（反之亦然）。這正是多層檢查的用意，不是測試缺口 |
 
 **結論：剩餘存活者中沒有代表真實測試缺口的項目。**
 
-## 發現的程式問題（未修改）
+## 發現並已修正的程式問題
 
-變異測試本身只檢驗測試品質；以下是補測試時實測確認、但超出這次範圍的程式問題，留待決定是否修正。
+變異測試本身只檢驗測試品質；以下三個問題是補測試時實測確認的程式錯誤，已一併修正
+（commit `修正：未登入導向 404、SSRF 漏擋 CGNAT 位址、網頁表單接受格式錯誤網址`）。
+每項都有對應測試，並確認「把修正還原時測試會失敗」。
 
 ### 1. 未登入時導向不存在的登入頁（404）
 
@@ -219,34 +225,35 @@ ninja_shortener/  api.py  urls.py
 但專案的登入頁在 `/login/`：
 
 ```
-GET /dashboard/          → 302 /accounts/login/?next=/dashboard/
-GET /accounts/login/...  → 404
+修正前：GET /dashboard/ → 302 /accounts/login/?next=/dashboard/ → 404
+修正後：GET /dashboard/ → 302 /login/?next=/dashboard/           → 登入頁，登入後回到 /dashboard/
 ```
 
-既有測試把這個行為寫成了預期值（`test_views.py` 兩處、`test_click_analytics.py`、
-`theme/tests/test_ui_flows.py` 各一處斷言 `/accounts/login/`）。
-修正方式：`settings.py` 加上 `LOGIN_URL = 'login'`，並更新這四個斷言。
-本次新增的測試以 `resolve_url(settings.LOGIN_URL)` 比對，修正後不需改動。
+- 修正：`settings.py` 加上 `LOGIN_URL = 'login'`。
+- 測試：既有四處把 `/accounts/login/` 寫成預期值的斷言改為專案登入頁；新增
+  `test_login_redirect_lands_on_login_page_and_returns`（導向的頁面真的存在，且登入後回到原頁面）。
 
 ### 2. SSRF 防護沒擋 `100.64.0.0/10`
 
-`_is_ip_blocked` 檢查 `is_private / is_loopback / is_link_local / is_reserved / is_multicast / is_unspecified`，
-但 CGNAT 共享位址 `100.64.0.0/10` 在 Python 的 `ipaddress` 中以上皆非，因此放行。
-阿里雲的 metadata 服務就在 `100.100.100.200`：
+`_is_ip_blocked` 原本檢查 `is_private / is_loopback / is_link_local / is_reserved / is_multicast / is_unspecified`，
+但 CGNAT 共享位址 `100.64.0.0/10` 在 Python 的 `ipaddress` 中以上皆非，因此被放行 ——
+阿里雲的 metadata 服務就在 `100.100.100.200`。
 
-```python
->>> _is_ip_blocked('100.100.100.200')
-False
-```
-
-修正方式：在現有條件後再加上 `or not ip.is_global`（只要不是公網位址就擋）。不能只用 `not ip.is_global`
-取代現有條件：multicast（例如 `224.0.0.1`）的 `is_global` 是 True，仍需要 `is_multicast` 那一條。
+- 修正：在既有條件後加上 `or not ip.is_global`（不是公網位址就擋）。不能只用 `not ip.is_global`
+  取代既有條件：multicast（例如 `224.0.0.1`）的 `is_global` 是 True，仍需要 `is_multicast` 那一條。
+- 測試：`TestIsIpBlocked` 加入 `100.64.0.1`、`100.100.100.200` 與其 IPv4-mapped 形式；
+  新增 `test_blocks_public_hostname_resolving_to_cgnat_metadata`。
 
 ### 3. 網頁表單接受格式錯誤的網址
 
-API 以 pydantic `HttpUrl` 驗證，網頁表單只檢查 scheme，`http://`、`http://exa mple.com`
-都能建立短網址（`Link.objects.create` 不會執行 Model 欄位驗證）。
-修正方式：在 `shorten_url_view` 以 Django `URLValidator(schemes=['http', 'https'])` 驗證。
+API 以 pydantic `HttpUrl` 驗證，網頁表單卻只檢查協議，`http://`、`http://exa mple.com`
+都能建立短網址（`Link.objects.create` 不會執行 Model 欄位的驗證器）。
+
+- 修正：`validators.py` 新增 `validate_url_format`（Django `URLValidator`，只允許 http / https），
+  網頁表單在協議檢查之後套用；錯誤訊息為「請輸入有效的網址」。協議錯誤仍先由原本的驗證回報
+  （訊息會指出是哪個協議）。
+- 測試：`test_shorten_url_rejects_malformed_url`、`test_shorten_url_accepts_valid_url_forms`
+  （含連接埠、IDN 網域、大寫協議），以及 `TestValidateUrlFormat`。
 
 ### 附註：裝置分類的已知限制
 
