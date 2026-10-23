@@ -46,10 +46,12 @@ OG 預覽卡片局部模板
                 d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
         <span>無法取得預覽：{{ link.preview.fetch_error|truncatechars:50 }}</span>
-        <a href="{% url 'refresh_preview' link.short_code %}"
-           class="ml-2 text-purple-600 hover:underline cursor-pointer focus-ring rounded">
-          重新抓取
-        </a>
+        <form method="post" action="{% url 'refresh_preview' link.short_code %}" class="ml-2">
+          {% csrf_token %}
+          <button type="submit" class="text-purple-600 hover:underline cursor-pointer focus-ring rounded">
+            重新抓取
+          </button>
+        </form>
       </div>
     {% elif link.preview.fetch_status == 'pending' %}
       <!-- Pending with Skeleton Loading -->
@@ -72,10 +74,12 @@ OG 預覽卡片局部模板
       <!-- Success but no OG data -->
       <div class="flex items-center justify-between text-sm text-gray-500">
         <span>此網頁未提供預覽資訊</span>
-        <a href="{% url 'refresh_preview' link.short_code %}"
-           class="text-purple-600 hover:underline cursor-pointer focus-ring rounded">
-          重新抓取
-        </a>
+        <form method="post" action="{% url 'refresh_preview' link.short_code %}">
+          {% csrf_token %}
+          <button type="submit" class="text-purple-600 hover:underline cursor-pointer focus-ring rounded">
+            重新抓取
+          </button>
+        </form>
       </div>
     {% endif %}
   </div>
@@ -84,10 +88,12 @@ OG 預覽卡片局部模板
   <div class="border-t border-gray-100 pt-4 mt-4">
     <div class="flex items-center justify-between text-sm text-gray-500">
       <span>尚未抓取預覽資料</span>
-      <a href="{% url 'refresh_preview' link.short_code %}"
-         class="text-purple-600 hover:underline cursor-pointer focus-ring rounded">
-        抓取預覽
-      </a>
+      <form method="post" action="{% url 'refresh_preview' link.short_code %}">
+        {% csrf_token %}
+        <button type="submit" class="text-purple-600 hover:underline cursor-pointer focus-ring rounded">
+          抓取預覽
+        </button>
+      </form>
     </div>
   </div>
 {% endif %}

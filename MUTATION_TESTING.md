@@ -25,7 +25,7 @@
   `@login_required`、JWT 取 token 的端點整個沒註冊，現有測試全都不會失敗。
 - 補了 243 個測試、修正 3 個程式問題後，剩下的 163 個存活者已逐一判讀，全部屬於等價變異、
   測試環境下無法區分的設定預設值、效能 / 文件 / 日誌類，或刻意不鎖死的可調參數（見〈剩餘存活者〉）。
-- 過程中另外發現 **3 個程式問題**，已一併修正（見〈發現並已修正的程式問題〉）。
+- 過程中另外發現 **4 個程式問題**，已一併修正（見〈發現並已修正的程式問題〉）。
 
 ## 範圍
 
@@ -215,8 +215,9 @@ ninja_shortener/  api.py  urls.py
 
 ## 發現並已修正的程式問題
 
-變異測試本身只檢驗測試品質；以下三個問題是補測試時實測確認的程式錯誤，已一併修正
-（commit `修正：未登入導向 404、SSRF 漏擋 CGNAT 位址、網頁表單接受格式錯誤網址`）。
+變異測試本身只檢驗測試品質；以下四個問題是補測試、盤點時實測確認的程式錯誤，已一併修正
+（第 1–3 項：commit `修正：未登入導向 404、SSRF 漏擋 CGNAT 位址、網頁表單接受格式錯誤網址`；
+第 4 項：commit `修正：重新抓取預覽改為只接受 POST，納入 CSRF 保護`）。
 每項都有對應測試，並確認「把修正還原時測試會失敗」。
 
 ### 1. 未登入時導向不存在的登入頁（404）
@@ -254,6 +255,30 @@ API 以 pydantic `HttpUrl` 驗證，網頁表單卻只檢查協議，`http://`�
   （訊息會指出是哪個協議）。
 - 測試：`test_shorten_url_rejects_malformed_url`、`test_shorten_url_accepts_valid_url_forms`
   （含連接埠、IDN 網域、大寫協議），以及 `TestValidateUrlFormat`。
+
+### 4. 重新抓取預覽可由 GET 觸發（CSRF）
+
+dashboard 上的「重新抓取 / 抓取預覽」原本是 `<a href="/links/<code>/refresh/">` 連結，
+view 不檢查 HTTP 方法就把預覽重設為 pending 並排入背景抓取。Django 的 CSRF 保護只檢查
+POST 等會改變狀態的方法，因此其他網站只要放一張
+`<img src="https://<站台>/links/<code>/refresh/">`，登入中的擁有者瀏覽該頁時就會在不知情下觸發。
+短碼本來就是公開分享的，攻擊者不難取得。影響有限（只能重抓擁有者自己的連結），
+但「有副作用的操作走 GET」本身就是錯的，同專案的刪除連結、建立 / 撤銷 API Key 都已只接受 POST。
+
+```
+修正前：GET  /links/<code>/refresh/（他站 <img> 也能觸發） → 預覽重設、排入背景抓取
+修正後：GET  /links/<code>/refresh/                      → 302 /dashboard/，不做任何事
+        POST /links/<code>/refresh/（未帶 CSRF token）    → 403
+```
+
+- 修正：view 只接受 POST，GET 一律導回 dashboard；`_preview_card.html` 的三處連結改為帶
+  `{% csrf_token %}` 的 POST 表單（輪詢端點以 `render_to_string(..., request=request)` 產生卡片，
+  回傳的 HTML 裡 token 同樣有效）。API 端的 `POST /api/links/{code}/refresh-preview` 以 header 帶
+  JWT / API Key 認證、不靠 cookie，不受 CSRF 影響，維持不變。
+- 測試：`test_refresh_preview_view_get_does_nothing`（GET 不排入抓取、預覽狀態不變）、
+  `test_refresh_preview_view_requires_csrf_token`（`enforce_csrf_checks=True`，未帶 token 回 403），
+  以及 `test_refresh_control_is_post_form_with_csrf`（失敗、成功無資料、尚無預覽三種卡片都是帶 token 的
+  POST 表單，不再有 GET 連結）；原本以 GET 呼叫的測試改用 POST。
 
 ### 附註：裝置分類的已知限制
 

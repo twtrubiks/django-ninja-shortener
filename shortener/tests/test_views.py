@@ -7,6 +7,7 @@ from django.contrib.auth.models import User
 from django.contrib.messages import get_messages
 from django.db import connection
 from django.shortcuts import resolve_url
+from django.test import Client
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
@@ -629,7 +630,7 @@ def test_refresh_preview_view_owner(authenticated_client, authenticated_user):
     )
 
     with patch('shortener.services.async_task') as mock_async:
-        response = authenticated_client.get(reverse('refresh_preview', args=[link.short_code]))
+        response = authenticated_client.post(reverse('refresh_preview', args=[link.short_code]))
 
     assert response.status_code == 302
     assert response.url == reverse('dashboard')
@@ -649,7 +650,7 @@ def test_refresh_preview_view_non_owner(authenticated_client, other_user):
     )
 
     with patch('shortener.services.async_task') as mock_async:
-        response = authenticated_client.get(reverse('refresh_preview', args=[link.short_code]))
+        response = authenticated_client.post(reverse('refresh_preview', args=[link.short_code]))
 
     assert response.status_code == 302
     assert response.url == reverse('dashboard')
@@ -660,6 +661,41 @@ def test_refresh_preview_view_non_owner(authenticated_client, other_user):
 
 
 @pytest.mark.django_db
+def test_refresh_preview_view_get_does_nothing(authenticated_client, authenticated_user):
+    """GET 不會重新抓取（避免被其他網站以 <img> 等方式跨站觸發），只導回 dashboard"""
+    link = Link.objects.create(
+        original_url='https://example.com', short_code='refresh4', owner=authenticated_user
+    )
+    LinkPreview.objects.create(
+        link=link, fetch_status=LinkPreview.FetchStatus.FAILED, fetch_error='舊錯誤'
+    )
+
+    with patch('shortener.services.async_task') as mock_async:
+        response = authenticated_client.get(reverse('refresh_preview', args=[link.short_code]))
+
+    assert response.status_code == 302
+    assert response.url == reverse('dashboard')
+    mock_async.assert_not_called()
+    assert LinkPreview.objects.get(link=link).fetch_status == LinkPreview.FetchStatus.FAILED
+
+
+@pytest.mark.django_db
+def test_refresh_preview_view_requires_csrf_token(authenticated_user):
+    """POST 受 CSRF 保護：沒有 token 的跨站請求會被拒絕"""
+    link = Link.objects.create(
+        original_url='https://example.com', short_code='refresh5', owner=authenticated_user
+    )
+    csrf_client = Client(enforce_csrf_checks=True)
+    csrf_client.login(username='testuser', password='password123')
+
+    with patch('shortener.services.async_task') as mock_async:
+        response = csrf_client.post(reverse('refresh_preview', args=[link.short_code]))
+
+    assert response.status_code == 403
+    mock_async.assert_not_called()
+
+
+@pytest.mark.django_db
 def test_refresh_preview_view_requires_login(client, authenticated_user):
     """未登入不可重新抓取，會被導向登入頁。"""
     link = Link.objects.create(
@@ -667,7 +703,7 @@ def test_refresh_preview_view_requires_login(client, authenticated_user):
     )
 
     with patch('shortener.services.async_task') as mock_async:
-        response = client.get(reverse('refresh_preview', args=[link.short_code]))
+        response = client.post(reverse('refresh_preview', args=[link.short_code]))
 
     assert response.status_code == 302
     assert response.url.startswith(resolve_url(settings.LOGIN_URL))
@@ -679,7 +715,7 @@ def test_refresh_preview_view_requires_login(client, authenticated_user):
 @pytest.mark.django_db
 @pytest.mark.parametrize('method, url_name, args', [
     ('get', 'dashboard', []),
-    ('get', 'refresh_preview', ['guarded']),
+    ('post', 'refresh_preview', ['guarded']),
     ('get', 'preview_status', ['guarded']),
     ('post', 'delete_link', ['guarded']),
     ('get', 'link_stats', ['guarded']),

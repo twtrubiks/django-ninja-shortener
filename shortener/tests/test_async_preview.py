@@ -135,6 +135,25 @@ class TestPreviewStatusView:
         assert res.status_code == 200
         assert res.json()['status'] == 'none'
 
+    @pytest.mark.parametrize('preview_status', ['failed', 'success', None])
+    def test_refresh_control_is_post_form_with_csrf(
+        self, authenticated_client, authenticated_user, preview_status
+    ):
+        """卡片上的「重新抓取 / 抓取預覽」是帶 CSRF token 的 POST 表單（輪詢回傳的 HTML 也一樣）"""
+        link = Link.objects.create(
+            original_url='https://example.com',
+            short_code='stat05',
+            owner=authenticated_user,
+        )
+        if preview_status:
+            LinkPreview.objects.create(link=link, fetch_status=preview_status)
+
+        html = authenticated_client.get(f'/links/{link.short_code}/preview-status/').json()['html']
+
+        assert '<form method="post" action="/links/stat05/refresh/"' in html
+        assert 'name="csrfmiddlewaretoken"' in html
+        assert 'href="/links/stat05/refresh/"' not in html
+
     def test_non_owner_forbidden(self, authenticated_client, other_user):
         link = Link.objects.create(
             original_url='https://example.com',

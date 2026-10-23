@@ -15,7 +15,7 @@
 
 | 項目 | 數值 |
 |------|------|
-| 測試案例總數 | 445 |
+| 測試案例總數 | 450 |
 | 測試覆蓋率 | 99%（`pytest --cov=.`；只算應用程式碼為 97%） |
 | 變異分數 | 93.3%（見 [MUTATION_TESTING.md](MUTATION_TESTING.md)） |
 | 測試檔案數 | 18 |
@@ -122,6 +122,7 @@
 | 分頁 | `test_dashboard_pagination_*`（第一頁、第二頁、無效頁碼、超出範圍） |
 | 連結限制 | `test_user_link_limit_*`（達到上限、未達上限）、`test_anonymous_user_no_link_limit` |
 | 連結刪除 | `test_delete_link_*`（成功、權限拒絕、不存在、未認證、GET 請求重定向） |
+| 重新抓取預覽 | `test_refresh_preview_view_*`（擁有者、非擁有者、未認證、GET 不動作、缺 CSRF token 回 403） |
 
 #### `theme/tests/test_ui_flows.py`
 
@@ -223,6 +224,7 @@ pytest --cov=. --cov-report=html
 | JWT 認證 | `test_api.py::test_unauthenticated_user_cannot_create_link` |
 | 連結數量限制 | `test_api.py::test_user_link_limit_*`、`test_views.py::test_user_link_limit_*` |
 | 登入保護 | `test_views.py::test_login_required_views_redirect_anonymous` |
+| CSRF（有副作用的操作只接受 POST） | `test_views.py::test_refresh_preview_view_requires_csrf_token`、`test_refresh_preview_view_get_does_nothing`、`test_async_preview.py::TestPreviewStatusView::test_refresh_control_is_post_form_with_csrf` |
 | API 認證要求 | `test_api.py::test_authenticated_endpoints_reject_anonymous` |
 
 ## 8. 變異測試

@@ -74,7 +74,7 @@ Chrome Extension
 * **Async Tasks**: Uses [Django-Q2](https://django-q2.readthedocs.io/) to fetch OG data in the background (with PostgreSQL ORM as the broker, no extra Redis required)
 * **Click Charts**: Uses [Chart.js](https://www.chartjs.org/) to render the daily click line chart (bundled locally with the project, no CDN dependency)
 * **UA Parsing**: Uses [ua-parser](https://github.com/ua-parser/uap-python) to parse device / browser / OS and detect bots
-* **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial) (445 test cases, 99% coverage, 93.3% mutation score — see [MUTATION_TESTING.md](MUTATION_TESTING.md), in Chinese)
+* **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial) (450 test cases, 99% coverage, 93.3% mutation score — see [MUTATION_TESTING.md](MUTATION_TESTING.md), in Chinese)
 * **Containerization**: [Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 Quick Start (Using Docker, Recommended)

@@ -192,7 +192,13 @@ class RegisterView(generic.CreateView):
 
 @login_required
 def refresh_preview_view(request, short_code):
-    """手動將 OG 預覽重新排入背景抓取"""
+    """手動將 OG 預覽重新排入背景抓取
+
+    只接受 POST（受 CSRF 保護）：GET 可被其他網站以 <img> 等方式在使用者不知情下觸發。
+    """
+    if request.method != 'POST':
+        return redirect('dashboard')
+
     link, error = get_owned_link_or_redirect(request, short_code, '操作')
     if error:
         return error
