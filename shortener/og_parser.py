@@ -94,6 +94,11 @@ def _is_ip_blocked(ip_str: str) -> bool:
 
     會拆解 IPv6 內嵌的 IPv4（IPv4-mapped、6to4），避免 ::ffff:127.0.0.1
     這類包裝形式繞過檢查。
+
+    最後再以 is_global 兜底：凡不是公網位址一律擋下。像 CGNAT 共享位址
+    100.64.0.0/10 不屬於上面任何一類，但雲端 metadata 服務可能就在其中
+    （例如阿里雲 100.100.100.200）。multicast 的 is_global 為 True，
+    故仍需保留 is_multicast 那一條，不能只靠 is_global。
     """
     # 去掉 IPv6 的 scope id（例如 fe80::1%eth0）再解析
     ip_str = ip_str.split('%')[0]
@@ -117,6 +122,7 @@ def _is_ip_blocked(ip_str: str) -> bool:
         or ip.is_reserved
         or ip.is_multicast
         or ip.is_unspecified
+        or not ip.is_global
     )
 
 

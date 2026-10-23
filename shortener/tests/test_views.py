@@ -50,7 +50,7 @@ def test_dashboard_view_unauthenticated(client):
     """測試未登入用戶訪問儀表板會被重定向到登入頁面。"""
     response = client.get(reverse('dashboard'))
     assert response.status_code == 302
-    assert response.url.startswith('/accounts/login/')
+    assert response.url == '/login/?next=/dashboard/'
 
 
 @pytest.mark.django_db
@@ -434,7 +434,7 @@ def test_delete_link_unauthenticated(client, authenticated_user):
     response = client.post(reverse('delete_link', args=[link.short_code]))
 
     assert response.status_code == 302
-    assert '/accounts/login/' in response.url
+    assert response.url.startswith('/login/?next=')
     # 連結應該仍然存在
     assert Link.objects.filter(short_code="protect1").exists()
 
@@ -792,3 +792,56 @@ def test_expired_page_rendered_with_request(authenticated_client, authenticated_
 
     assert response.status_code == 410
     assert f'您好, {authenticated_user.username}!' in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_login_redirect_lands_on_login_page_and_returns(client, authenticated_user):
+    """未登入被導向的登入頁真實存在（不是 404），登入後回到原本要去的頁面"""
+    Link.objects.create(original_url='https://example.com', short_code='backhere', owner=authenticated_user)
+    stats_url = reverse('link_stats', args=['backhere'])
+
+    login_page = client.get(stats_url, follow=True)
+    assert login_page.status_code == 200
+    assert 'registration/login.html' in [t.name for t in login_page.templates]
+
+    # 表單沒有 action，會送回含 ?next= 的同一個網址
+    response = client.post(
+        login_page.request['PATH_INFO'] + '?' + login_page.request['QUERY_STRING'],
+        {'username': 'testuser', 'password': 'password123'},
+    )
+    assert response.status_code == 302
+    assert response.url == stats_url
+
+
+# ===== Shorten URL View：網址格式 =====
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('url', [
+    'http://',
+    'https://',
+    'http://exa mple.com',
+    'https:// not a host',
+    'http://.com',
+])
+def test_shorten_url_rejects_malformed_url(client, url):
+    """協議正確但格式錯誤的網址（無主機名、含空白）不建立連結，與 API 的驗證一致"""
+    response = client.post(reverse('shorten_url'), {'original_url': url})
+
+    assert response.status_code == 302
+    assert response.url == reverse('home')
+    assert Link.objects.count() == 0
+    assert [str(m) for m in get_messages(response.wsgi_request)] == ['請輸入有效的網址']
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('url', [
+    'http://localhost:8000/path',
+    'https://sub.example.co.uk/a/b?x=1&y=2#frag',
+    'https://例子.測試/路徑',
+    'HTTPS://EXAMPLE.COM/',
+])
+def test_shorten_url_accepts_valid_url_forms(client, url):
+    """常見的合法寫法（含連接埠、IDN 網域、大寫協議）照常建立"""
+    client.post(reverse('shorten_url'), {'original_url': url})
+
+    assert Link.objects.filter(original_url=url).exists()

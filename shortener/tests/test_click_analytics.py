@@ -446,8 +446,7 @@ class TestLinkStatsView:
         response = client.get('/links/statlink/stats/')
 
         assert response.status_code == 302
-        # 專案未設 LOGIN_URL，login_required 導向 Django 預設（與既有測試一致）
-        assert response.url.startswith('/accounts/login/')
+        assert response.url == '/login/?next=/links/statlink/stats/'
 
     def test_unknown_short_code_404(self, authenticated_client):
         response = authenticated_client.get('/links/nosuchlink/stats/')

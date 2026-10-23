@@ -3,8 +3,13 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 
 ALLOWED_SCHEMES = {'http', 'https'}
+
+# 網址格式驗證（主機名、不可含空白等）。API 端由 pydantic HttpUrl 負責，
+# 網頁表單需自行驗證：Link.objects.create 不會執行 Model 欄位的驗證器
+validate_url_format = URLValidator(schemes=sorted(ALLOWED_SCHEMES), message='請輸入有效的網址')
 
 # 目標網址長度上限（與 Link.original_url 的 max_length 一致；
 # 超過者需在寫入前擋下，否則會撞資料庫欄位長度直接 500）

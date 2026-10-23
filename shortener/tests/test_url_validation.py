@@ -3,7 +3,12 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.contrib.messages import get_messages
 
-from shortener.validators import MAX_URL_LENGTH, validate_custom_slug, validate_url_scheme
+from shortener.validators import (
+    MAX_URL_LENGTH,
+    validate_custom_slug,
+    validate_url_format,
+    validate_url_scheme,
+)
 from shortener.models import Link
 
 
@@ -214,3 +219,27 @@ class TestValidateCustomSlug:
         with pytest.raises(ValueError) as exc_info:
             validate_custom_slug(raw)
         assert str(exc_info.value) == message
+
+
+class TestValidateUrlFormat:
+    """網址格式驗證（網頁表單用；API 端由 pydantic HttpUrl 負責）"""
+
+    @pytest.mark.parametrize('url', [
+        'http://example.com',
+        'https://example.com:8443/path?q=1#top',
+        'http://localhost:8000/',
+        'https://例子.測試/',
+    ])
+    def test_valid(self, url):
+        validate_url_format(url)  # 不應拋出異常
+
+    @pytest.mark.parametrize('url', [
+        'http://',
+        'http://exa mple.com',
+        'example.com',
+        'ftp://example.com',
+    ])
+    def test_invalid(self, url):
+        with pytest.raises(ValidationError) as exc_info:
+            validate_url_format(url)
+        assert exc_info.value.message == '請輸入有效的網址'

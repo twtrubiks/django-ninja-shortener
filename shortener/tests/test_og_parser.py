@@ -134,6 +134,18 @@ class TestSSRFBypassVectors:
             with pytest.raises(SSRFBlockedError):
                 _validate_url_security('http://totally-legit.example.com/')
 
+    def test_blocks_public_hostname_resolving_to_cgnat_metadata(self):
+        """公開域名解析到 CGNAT 範圍的 metadata 服務（阿里雲 100.100.100.200）也要擋"""
+        def resolver(host, port, *args, **kwargs):
+            return [(
+                socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP,
+                '', ('100.100.100.200', port),
+            )]
+
+        with patch('shortener.og_parser.socket.getaddrinfo', new=resolver):
+            with pytest.raises(SSRFBlockedError, match='100.100.100.200'):
+                _validate_url_security('http://metadata.example.com/latest/meta-data/')
+
     def test_blocks_ipv4_mapped_private_via_resolver(self):
         """解析結果為 IPv4-mapped 的私有位址應被拆解後擋下"""
         def resolver(host, port, *args, **kwargs):
@@ -469,6 +481,9 @@ class TestIsIpBlocked:
         ('::1', True),                      # IPv6 loopback
         ('fe80::1%eth0', True),             # link-local + scope id
         ('224.0.0.1', True),                # multicast（非 private，需靠 is_multicast 擋）
+        ('100.64.0.1', True),               # CGNAT 共享位址（非 private / reserved，靠 is_global 擋）
+        ('100.100.100.200', True),          # 阿里雲 metadata 服務
+        ('::ffff:100.100.100.200', True),   # 同上，IPv4-mapped 包裝
         ('2002:c0a8:101::1', True),         # 6to4 包裝的 192.168.1.1
         ('not-an-ip', True),                # 無法解析 → 保守視為不可信
     ])

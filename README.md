@@ -56,7 +56,7 @@ Chrome 擴充套件
 * **RESTful API**：完整的 API 端點，使用 JWT 或長效 API Key 認證。
 * **API Key（Personal Access Token）**：長效金鑰適合程式化串接與瀏覽器擴充套件（免 JWT 過期換發）；資料庫僅存 SHA-256 雜湊、明文只在建立當下顯示一次，可於網頁「API Keys」頁面建立與撤銷（每人上限 10 把）。
 * **Chrome 瀏覽器擴充套件**：Manifest V3，一鍵縮短當前分頁並自動複製到剪貼簿，支援自訂 slug 與最近連結列表，詳見下方〈Chrome 擴充套件〉一節。
-* **安全防護**：SSRF 防護（解析實際 IP 後以 `ipaddress` 物件化檢查，涵蓋十進位 / hex / octal / IPv6-mapped 等編碼繞過，並對每個重定向目標重新驗證；DNS rebinding 列為已知限制）、OG 抓取回應大小上限（串流讀取並對解壓後位元組設限，防解壓縮炸彈 / 超大 body 撐爆背景 worker）、URL 協議驗證、CSRF 保護、TOCTOU 競態條件防護、生產環境 HTTPS 強化（`DEBUG=False` 時自動啟用 HSTS、HTTPS 轉址與 `Secure` cookie）、API 流量限制（throttling，防濫用 / DoS）。
+* **安全防護**：SSRF 防護（解析實際 IP 後以 `ipaddress` 物件化檢查，涵蓋十進位 / hex / octal / IPv6-mapped 等編碼繞過，非公網位址一律阻擋（含 CGNAT `100.64.0.0/10` 內的雲端 metadata），並對每個重定向目標重新驗證；DNS rebinding 列為已知限制）、OG 抓取回應大小上限（串流讀取並對解壓後位元組設限，防解壓縮炸彈 / 超大 body 撐爆背景 worker）、URL 協議與格式驗證、CSRF 保護、TOCTOU 競態條件防護、生產環境 HTTPS 強化（`DEBUG=False` 時自動啟用 HSTS、HTTPS 轉址與 `Secure` cookie）、API 流量限制（throttling，防濫用 / DoS）。
 * **設定環境變數化**：`SECRET_KEY`、`DEBUG`、`ALLOWED_HOSTS`、資料庫帳密皆可由環境變數注入；生產環境（`DEBUG=False`）若仍沿用內建預設金鑰會直接拒絕啟動。詳見下方〈環境變數與生產環境設定〉一節。
 * **Docker 支援**：提供 Dockerfile 和 Docker Compose 設定，簡化開發與部署流程。
 

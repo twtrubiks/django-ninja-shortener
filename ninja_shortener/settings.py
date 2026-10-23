@@ -266,6 +266,8 @@ INTERNAL_IPS = [
 ]
 
 # Redirects for login and logout
+# login_required 未登入時導向的登入頁；未設定時 Django 預設為不存在的 /accounts/login/（404）
+LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'home'
 

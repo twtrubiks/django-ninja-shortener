@@ -68,7 +68,7 @@ def test_login_logout_flow(test_client, test_user):
     # 驗證登出後 session 已清除
     dashboard_response = test_client.get(dashboard_url)
     assert dashboard_response.status_code == 302, "登出後存取儀表板應被重定向"
-    assert dashboard_response.url.startswith("/accounts/login/"), "應重定向到登入頁面"
+    assert dashboard_response.url.startswith(login_url), "應重定向到登入頁面"
 
 
 @pytest.mark.django_db
