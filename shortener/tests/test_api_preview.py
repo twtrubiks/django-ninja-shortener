@@ -107,6 +107,7 @@ class TestRefreshPreview:
         response = ninja_authenticated_client.post(f'/links/{link.short_code}/refresh-preview')
 
         assert response.status_code == 403
+        assert response.json() == {'detail': '您沒有權限操作此連結'}
 
 
 @pytest.mark.django_db
@@ -133,6 +134,16 @@ class TestGetLinkDetail:
         assert data['short_code'] == 'viewcode'
         assert data['preview']['og_title'] == 'Test'
 
+    def test_returns_the_requested_link_among_many(self, ninja_authenticated_client, test_user):
+        """資料庫有多筆連結時，回傳的是路徑指定的那一筆"""
+        for code in ('first01', 'second02', 'third03'):
+            Link.objects.create(original_url=f'https://example.com/{code}', short_code=code, owner=test_user)
+
+        data = ninja_authenticated_client.get('/links/second02').json()
+
+        assert data['short_code'] == 'second02'
+        assert data['original_url'] == 'https://example.com/second02'
+
     def test_non_owner_cannot_view(self, ninja_authenticated_client, other_user):
         """非擁有者無法查看連結詳情"""
         link = Link.objects.create(
@@ -144,6 +155,7 @@ class TestGetLinkDetail:
         response = ninja_authenticated_client.get(f'/links/{link.short_code}')
 
         assert response.status_code == 403
+        assert response.json() == {'detail': '您沒有權限查看此連結'}
 
     def test_returns_404_for_nonexistent_link(self, ninja_authenticated_client):
         """不存在的連結應返回 404"""

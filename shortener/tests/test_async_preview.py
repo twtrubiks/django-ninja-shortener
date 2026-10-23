@@ -145,6 +145,7 @@ class TestPreviewStatusView:
         res = authenticated_client.get(f'/links/{link.short_code}/preview-status/')
 
         assert res.status_code == 403
+        assert res.json() == {'detail': '您沒有權限查看此連結'}
 
     def test_requires_login(self, client):
         res = client.get('/links/whatever/preview-status/')

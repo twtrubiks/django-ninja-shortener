@@ -56,6 +56,22 @@ class TestLinkPreviewModel:
 
         assert preview.has_preview_data is False
 
+    @pytest.mark.parametrize('field, value', [
+        ('og_title', 'Only Title'),
+        ('og_description', 'Only Description'),
+        ('og_image', 'https://example.com/only.jpg'),
+    ])
+    def test_has_preview_data_with_any_single_field(self, field, value):
+        """標題、描述、圖片任一有值即視為有預覽資料"""
+        link = Link.objects.create(
+            original_url='https://example.com',
+            short_code=f'single-{field}',
+        )
+
+        preview = LinkPreview.objects.create(link=link, **{field: value})
+
+        assert preview.has_preview_data is True
+
     def test_cascade_delete(self):
         """刪除 Link 時應一併刪除 Preview"""
         link = Link.objects.create(

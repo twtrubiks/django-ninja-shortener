@@ -5,10 +5,12 @@
 """
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from ninja.testing import TestClient
 
 from ninja_shortener.api import api
-from shortener.models import Link
+from shortener.models import Link, LinkPreview
 
 
 @pytest.fixture
@@ -103,3 +105,43 @@ def test_list_links_includes_preview_fields(ninja_authenticated_client, test_use
     assert 'preview' in item
     assert item['original_url'] == 'https://example.com/0'
     assert item['click_count'] == 0
+
+
+@pytest.mark.django_db
+def test_list_links_default_pagination(ninja_authenticated_client, test_user, make_links):
+    """未指定分頁參數時預設第 1 頁、每頁 10 筆"""
+    make_links(test_user, 11)
+
+    data = ninja_authenticated_client.get('/links').json()
+
+    assert data['page'] == 1
+    assert data['page_size'] == 10
+    assert len(data['items']) == 10
+    assert data['count'] == 11
+
+
+@pytest.mark.django_db
+def test_list_links_page_size_lower_bound(ninja_authenticated_client, test_user, make_links):
+    """page_size 小於 1 時鉗制為 1"""
+    make_links(test_user, 2)
+
+    data = ninja_authenticated_client.get('/links?page_size=0').json()
+
+    assert data['page_size'] == 1
+    assert len(data['items']) == 1
+
+
+@pytest.mark.django_db
+def test_list_links_query_count_does_not_grow(ninja_authenticated_client, test_user, make_links):
+    """preview 以 select_related 一併載入：查詢數不隨連結數量增加（無 N+1）"""
+    links = make_links(test_user, 1)
+    LinkPreview.objects.create(link=links[0])
+    with CaptureQueriesContext(connection) as one_link:
+        ninja_authenticated_client.get('/links')
+
+    for link in make_links(test_user, 4, prefix='more'):
+        LinkPreview.objects.create(link=link)
+    with CaptureQueriesContext(connection) as five_links:
+        ninja_authenticated_client.get('/links')
+
+    assert len(five_links) == len(one_link)

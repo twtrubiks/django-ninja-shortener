@@ -5,7 +5,7 @@ from django.contrib.auth.models import User
 from django.db.utils import IntegrityError
 from django.utils import timezone
 
-from shortener.models import Link
+from shortener.models import ApiKey, ClickEvent, Link
 
 
 @pytest.mark.django_db
@@ -133,3 +133,23 @@ def test_link_is_not_expired_when_expires_at_is_none():
         expires_at=None
     )
     assert link.is_expired is False
+
+
+@pytest.mark.django_db
+def test_click_event_string_representation():
+    """ClickEvent 的 __str__ 含短碼與點擊時間（admin 列表辨識用）"""
+    link = Link.objects.create(original_url="https://example.com", short_code="clickstr")
+    event = ClickEvent.objects.create(
+        link=link, clicked_at=timezone.make_aware(timezone.datetime(2026, 3, 4, 5, 6))
+    )
+
+    assert str(event) == "Click on clickstr at 2026-03-04 05:06"
+
+
+@pytest.mark.django_db
+def test_api_key_string_representation():
+    """ApiKey 的 __str__ 只顯示名稱與 prefix，不含雜湊"""
+    user = User.objects.create_user(username="keyowner", password="password123")
+    api_key = ApiKey.objects.create(owner=user, name="CLI", key_hash="f" * 64, prefix="sk_abcde")
+
+    assert str(api_key) == "CLI (sk_abcde…) for keyowner"

@@ -60,7 +60,7 @@ def test_generate_api_key_format():
     key2 = generate_api_key()
 
     assert key1.startswith(API_KEY_PREFIX)
-    assert len(key1) >= 40
+    assert len(key1) == 46  # sk_ + token_urlsafe(32) 的 43 字元
     assert key1 != key2
 
 
@@ -181,6 +181,9 @@ def test_create_api_key_shows_plaintext_once(authenticated_client, authenticated
     )
 
     api_key = ApiKey.objects.get(owner=authenticated_user)
+    assert [str(m) for m in response.context['messages']] == [
+        'API Key 已建立，請立即複製保存——它只會顯示這一次'
+    ]
     plaintexts = set(_extract_plaintext_keys(response.content.decode()))
     assert len(plaintexts) == 1
     assert hash_api_key(plaintexts.pop()) == api_key.key_hash
@@ -226,3 +229,82 @@ def test_cannot_delete_other_users_api_key(authenticated_client, other_user, mak
 
     assert response.status_code == 404
     assert ApiKey.objects.filter(pk=api_key.pk).exists()
+
+
+@pytest.mark.django_db
+def test_create_api_key_get_does_not_create(authenticated_client, authenticated_user):
+    """GET 建立端點只會導回管理頁，不會建立金鑰"""
+    response = authenticated_client.get(reverse('create_api_key'))
+
+    assert response.status_code == 302
+    assert response.url == reverse('api_keys')
+    assert not ApiKey.objects.filter(owner=authenticated_user).exists()
+
+
+@pytest.mark.django_db
+def test_create_api_key_name_default_and_truncation(authenticated_client, authenticated_user):
+    """名稱空白時預設為「未命名」、過長截斷至 100 字元；prefix 為明文前 8 字元"""
+    authenticated_client.post(reverse('create_api_key'), {'name': '   '})
+    raw_key = authenticated_client.session['new_api_key']
+    authenticated_client.post(reverse('create_api_key'), {'name': 'n' * 150})
+
+    unnamed = ApiKey.objects.get(owner=authenticated_user, name='未命名')
+    assert unnamed.prefix == raw_key[:8]
+    assert unnamed.key_hash == hash_api_key(raw_key)
+    assert ApiKey.objects.filter(owner=authenticated_user, name='n' * 100).exists()
+
+
+@pytest.mark.django_db
+def test_api_keys_page_shows_usage(authenticated_client, settings):
+    """管理頁顯示目前數量 / 上限"""
+    settings.USER_MAX_API_KEYS = 7
+
+    response = authenticated_client.get(reverse('api_keys'))
+
+    assert response.context['max_api_keys'] == 7
+    assert '（0 / 7）' in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_delete_api_key_get_does_not_delete(authenticated_client, authenticated_user, make_api_key):
+    """GET 撤銷端點只會導回管理頁，金鑰仍存在"""
+    api_key, _ = make_api_key(authenticated_user)
+
+    response = authenticated_client.get(reverse('delete_api_key', args=[api_key.id]))
+
+    assert response.status_code == 302
+    assert response.url == reverse('api_keys')
+    assert ApiKey.objects.filter(pk=api_key.pk).exists()
+
+
+@pytest.mark.django_db
+def test_delete_api_key_shows_message(authenticated_client, authenticated_user, make_api_key):
+    """撤銷成功後導回管理頁並顯示訊息"""
+    api_key, _ = make_api_key(authenticated_user)
+
+    response = authenticated_client.post(
+        reverse('delete_api_key', args=[api_key.id]), follow=True
+    )
+
+    assert response.redirect_chain[-1][0] == reverse('api_keys')
+    assert [str(m) for m in response.context['messages']] == ['API Key 已撤銷']
+
+
+@pytest.mark.django_db
+def test_delete_api_key_only_target(authenticated_client, authenticated_user, make_api_key):
+    """有多把金鑰時只撤銷指定的那一把"""
+    keep, _ = make_api_key(authenticated_user, name='keep')
+    drop, _ = make_api_key(authenticated_user, name='drop')
+
+    authenticated_client.post(reverse('delete_api_key', args=[drop.id]))
+
+    assert list(ApiKey.objects.filter(owner=authenticated_user)) == [keep]
+
+
+@pytest.mark.django_db
+def test_create_api_key_without_name_field(authenticated_client, authenticated_user):
+    """表單沒有 name 欄位（例如直接 POST）也能建立，名稱為「未命名」"""
+    response = authenticated_client.post(reverse('create_api_key'))
+
+    assert response.status_code == 302
+    assert ApiKey.objects.get(owner=authenticated_user).name == '未命名'

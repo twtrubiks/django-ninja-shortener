@@ -237,7 +237,7 @@ def test_delete_link_api_success(test_user, ninja_authenticated_client):
 
     assert response.status_code == 200
     response_json = response.json()
-    assert '成功刪除' in response_json['detail']
+    assert response_json['detail'] == '連結已成功刪除'
     assert response_json['short_code'] == 'apidel01'
     assert not Link.objects.filter(short_code="apidel01").exists()
 
@@ -262,7 +262,7 @@ def test_delete_link_api_permission_denied(test_user, ninja_authenticated_client
 
     assert response.status_code == 403
     response_json = response.json()
-    assert '沒有權限' in response_json['detail']
+    assert response_json['detail'] == '您沒有權限刪除此連結'
     # 連結應該仍然存在
     assert Link.objects.filter(short_code="apioth01").exists()
 
@@ -343,7 +343,7 @@ def test_shorten_short_code_generation_error_returns_500(ninja_authenticated_cli
         )
 
     assert response.status_code == 500
-    assert "系統發生錯誤" in response.json()["detail"]
+    assert response.json()["detail"] == "系統發生錯誤，請稍後再試"
 
 
 # ===== check-slug 端點 =====
@@ -357,6 +357,7 @@ def test_check_slug_available(ninja_authenticated_client):
     data = response.json()
     assert data["available"] is True
     assert data["slug"] == "freeslug"
+    assert data["message"] == "此網址可以使用"
 
 
 @pytest.mark.django_db
@@ -396,3 +397,73 @@ def test_check_slug_invalid_format(ninja_authenticated_client):
     data = response.json()
     assert data["available"] is False
     assert "至少 3 個字元" in data["message"]
+
+
+# ===== 認證要求（每個需登入的端點都必須擋下匿名請求）=====
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('method, path', [
+    ('post', '/shorten'),
+    ('post', '/links/anycode/refresh-preview'),
+    ('get', '/links'),
+    ('get', '/links/anycode'),
+    ('get', '/check-slug/anyslug'),
+    ('delete', '/links/anycode'),
+])
+def test_authenticated_endpoints_reject_anonymous(method, path):
+    """未帶憑證的請求一律 401（避免拿掉 auth 後變成公開端點，例如 check-slug 可被列舉）"""
+    Link.objects.create(original_url='https://example.com', short_code='anycode')
+    client = TestClient(api)
+
+    kwargs = {'json': {'original_url': 'https://example.com'}} if path == '/shorten' else {}
+    response = getattr(client, method)(path, **kwargs)
+
+    assert response.status_code == 401
+
+
+# ===== 自訂 slug 驗證（API）=====
+
+@pytest.mark.django_db
+def test_shorten_custom_slug_normalized(ninja_authenticated_client):
+    """API 的自訂 slug 同樣去空白、轉小寫後作為 short_code"""
+    response = ninja_authenticated_client.post(
+        "/shorten",
+        json={"original_url": "https://example.com/custom", "custom_slug": " My-Slug "},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["short_code"] == "my-slug"
+    assert data["is_custom_slug"] is True
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('slug, message', [
+    ('admin', '保留字'),
+    ('ab', '至少 3 個字元'),
+    ('bad_slug', '只能包含'),
+])
+def test_shorten_invalid_custom_slug_returns_422(ninja_authenticated_client, slug, message):
+    """保留字 / 格式不合的自訂 slug 回 422，不建立連結"""
+    response = ninja_authenticated_client.post(
+        "/shorten",
+        json={"original_url": "https://example.com/bad", "custom_slug": slug},
+    )
+
+    assert response.status_code == 422
+    assert message in str(response.json())
+    assert Link.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_shorten_blank_custom_slug_falls_back_to_auto(ninja_authenticated_client):
+    """自訂 slug 只有空白時視同未提供，改用自動生成短碼"""
+    response = ninja_authenticated_client.post(
+        "/shorten",
+        json={"original_url": "https://example.com/blank", "custom_slug": "   "},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_custom_slug"] is False
+    assert len(data["short_code"]) >= 8
