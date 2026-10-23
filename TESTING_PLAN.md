@@ -16,8 +16,8 @@
 | 項目 | 數值 |
 |------|------|
 | 測試案例總數 | 450 |
-| 測試覆蓋率 | 99%（`pytest --cov=.`；只算應用程式碼為 97%） |
-| 變異分數 | 93.3%（見 [MUTATION_TESTING.md](MUTATION_TESTING.md)） |
+| 測試覆蓋率 | 99%（`pytest --cov=.`；只算應用程式碼為 98%） |
+| 變異分數 | 93.4%（見 [MUTATION_TESTING.md](MUTATION_TESTING.md)） |
 | 測試檔案數 | 18 |
 
 ## 3. 測試分類與範疇
@@ -229,6 +229,6 @@ pytest --cov=. --cov-report=html
 
 ## 8. 變異測試
 
-除了覆蓋率，另以變異測試檢驗測試是否真的「抓得到錯」：對應用程式碼注入 2,435 個小錯誤，
+除了覆蓋率，另以變異測試檢驗測試是否真的「抓得到錯」：對應用程式碼注入 2,454 個小錯誤，
 看測試能殺死多少。結果、補強內容與剩餘存活者的分析見 [MUTATION_TESTING.md](MUTATION_TESTING.md)，
 工具與重跑方式見 [scripts/mutation/README.md](scripts/mutation/README.md)。

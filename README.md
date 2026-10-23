@@ -74,7 +74,7 @@ Chrome 擴充套件
 * **非同步任務**：使用 [Django-Q2](https://django-q2.readthedocs.io/) 背景處理 OG 抓取（以 PostgreSQL ORM 作為 broker，免額外的 Redis）
 * **點擊圖表**：使用 [Chart.js](https://www.chartjs.org/) 繪製每日點擊折線圖（隨專案提供本地檔案，無 CDN 依賴）
 * **UA 解析**：使用 [ua-parser](https://github.com/ua-parser/uap-python) 解析裝置 / 瀏覽器 / OS 與 bot 判定
-* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)（450 個測試案例，99% 覆蓋率，變異分數 93.3%，見 [MUTATION_TESTING.md](MUTATION_TESTING.md)）
+* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)（450 個測試案例，99% 覆蓋率，變異分數 93.4%，見 [MUTATION_TESTING.md](MUTATION_TESTING.md)）
 * **容器化**：[Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 快速啟動 (使用 Docker, 建議用這個)
