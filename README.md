@@ -74,7 +74,7 @@ Chrome 擴充套件
 * **非同步任務**：使用 [Django-Q2](https://django-q2.readthedocs.io/) 背景處理 OG 抓取（以 PostgreSQL ORM 作為 broker，免額外的 Redis）
 * **點擊圖表**：使用 [Chart.js](https://www.chartjs.org/) 繪製每日點擊折線圖（隨專案提供本地檔案，無 CDN 依賴）
 * **UA 解析**：使用 [ua-parser](https://github.com/ua-parser/uap-python) 解析裝置 / 瀏覽器 / OS 與 bot 判定
-* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)（202 個測試案例，97% 覆蓋率）
+* **測試**：[Pytest](https://github.com/twtrubiks/django_pytest_tutorial)（423 個測試案例，99% 覆蓋率，變異分數 93.3%，見 [MUTATION_TESTING.md](MUTATION_TESTING.md)）
 * **容器化**：[Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 快速啟動 (使用 Docker, 建議用這個)
@@ -257,6 +257,15 @@ docker compose -p ninja-prod -f docker-compose.prod.yml up -d --build
     # 確保已安裝開發依賴
     pytest --cov=. --cov-report=html
     ```
+
+* **變異測試（檢驗測試是否真的抓得到錯）：**
+
+    ```bash
+    pip install mutmut==3.8.0
+    python scripts/mutation/mutation_test.py run --workers 4
+    ```
+
+    結果與分析見 [MUTATION_TESTING.md](MUTATION_TESTING.md)，工具說明見 [scripts/mutation/README.md](scripts/mutation/README.md)。
 
 ![alt tag](https://cdn.imgpile.com/f/UZnApNQ_xl.png)
 

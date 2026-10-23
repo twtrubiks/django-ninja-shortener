@@ -15,9 +15,10 @@
 
 | 項目 | 數值 |
 |------|------|
-| 測試案例總數 | 109 |
-| 測試覆蓋率 | 93% |
-| 測試檔案數 | 11 |
+| 測試案例總數 | 423 |
+| 測試覆蓋率 | 99%（`pytest --cov=.`；只算應用程式碼為 97%） |
+| 變異分數 | 93.3%（見 [MUTATION_TESTING.md](MUTATION_TESTING.md)） |
+| 測試檔案數 | 18 |
 
 ## 3. 測試分類與範疇
 
@@ -157,15 +158,23 @@ ninja_shortener/
 │   └── tests/
 │       ├── __init__.py
 │       ├── conftest.py               # 共用 Fixtures
-│       ├── test_api.py               # API 端點測試
+│       ├── test_api.py               # API 端點測試（含認證要求、自訂 slug 驗證）
+│       ├── test_api_keys.py          # API Key 認證與管理頁
+│       ├── test_api_list.py          # 連結列表 API（分頁、N+1 查詢）
 │       ├── test_api_preview.py       # OG 預覽 API 測試
-│       ├── test_models.py            # Link 模型測試
+│       ├── test_async_preview.py     # 背景 OG 抓取與輪詢端點
+│       ├── test_click_analytics.py   # 點擊事件記錄與統計
+│       ├── test_migrations.py        # Model 與 migration 一致性
+│       ├── test_models.py            # Link / ClickEvent / ApiKey 模型測試
 │       ├── test_models_preview.py    # LinkPreview 模型測試
-│       ├── test_og_parser.py         # OG 解析器測試
-│       ├── test_qr_api.py            # QR Code API 測試
-│       ├── test_url_validation.py    # URL 驗證測試
+│       ├── test_og_parser.py         # OG 解析器、SSRF 防護、重定向
+│       ├── test_qr_api.py            # QR Code API 與產生器
+│       ├── test_services.py          # Service 層（建立連結、預覽寫入）
+│       ├── test_throttling.py        # 流量限制
+│       ├── test_url_validation.py    # URL / slug 驗證
+│       ├── test_urls.py              # 對外網址契約
 │       ├── test_utils.py             # 工具函數測試
-│       └── test_views.py             # 視圖測試
+│       └── test_views.py             # 視圖測試（含登入保護、表單各分支）
 └── theme/
     └── tests/
         ├── __init__.py
@@ -213,3 +222,11 @@ pytest --cov=. --cov-report=html
 | 權限檢查 | `test_api.py::test_delete_link_api_permission_denied`、`test_views.py::test_delete_link_permission_denied` |
 | JWT 認證 | `test_api.py::test_unauthenticated_user_cannot_create_link` |
 | 連結數量限制 | `test_api.py::test_user_link_limit_*`、`test_views.py::test_user_link_limit_*` |
+| 登入保護 | `test_views.py::test_login_required_views_redirect_anonymous` |
+| API 認證要求 | `test_api.py::test_authenticated_endpoints_reject_anonymous` |
+
+## 8. 變異測試
+
+除了覆蓋率，另以變異測試檢驗測試是否真的「抓得到錯」：對應用程式碼注入 2,435 個小錯誤，
+看測試能殺死多少。結果、補強內容與剩餘存活者的分析見 [MUTATION_TESTING.md](MUTATION_TESTING.md)，
+工具與重跑方式見 [scripts/mutation/README.md](scripts/mutation/README.md)。

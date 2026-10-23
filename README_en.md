@@ -74,7 +74,7 @@ Chrome Extension
 * **Async Tasks**: Uses [Django-Q2](https://django-q2.readthedocs.io/) to fetch OG data in the background (with PostgreSQL ORM as the broker, no extra Redis required)
 * **Click Charts**: Uses [Chart.js](https://www.chartjs.org/) to render the daily click line chart (bundled locally with the project, no CDN dependency)
 * **UA Parsing**: Uses [ua-parser](https://github.com/ua-parser/uap-python) to parse device / browser / OS and detect bots
-* **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial) (202 test cases, 97% coverage)
+* **Testing**: [Pytest](https://github.com/twtrubiks/django_pytest_tutorial) (423 test cases, 99% coverage, 93.3% mutation score — see [MUTATION_TESTING.md](MUTATION_TESTING.md), in Chinese)
 * **Containerization**: [Docker](https://github.com/twtrubiks/docker-tutorial)
 
 ## 🚀 Quick Start (Using Docker, Recommended)
@@ -265,6 +265,15 @@ The testing plan can be found in [TESTING_PLAN.md](TESTING_PLAN.md).
     # Ensure development dependencies are installed
     pytest --cov=. --cov-report=html
     ```
+
+* **Mutation testing (checks that the tests actually catch bugs):**
+
+    ```bash
+    pip install mutmut==3.8.0
+    python scripts/mutation/mutation_test.py run --workers 4
+    ```
+
+    See [MUTATION_TESTING.md](MUTATION_TESTING.md) for results and analysis (in Chinese), and [scripts/mutation/README.md](scripts/mutation/README.md) for the tool.
 
 ![alt tag](https://cdn.imgpile.com/f/UZnApNQ_xl.png)
 
